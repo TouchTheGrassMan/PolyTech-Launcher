@@ -63,9 +63,9 @@ PrismExternalUpdater::PrismExternalUpdater(QWidget* parent, const QString& appDi
     priv->autoCheck = priv->settings->value("auto_check", true).toBool();
     bool intervalOk = false;
     // default once per day
-    priv->updateInterval = priv->settings->value("update_interval", 86400).toInt(&intervalOk);
+    priv->updateInterval = priv->settings->value("update_interval", 0).toInt(&intervalOk);
     if (!intervalOk) {
-        priv->updateInterval = 86400;
+        priv->updateInterval = 0;
     }
     if (const auto lastCheck = priv->settings->value("last_check"); !lastCheck.isNull() && lastCheck.isValid()) {
         priv->lastCheck = QDateTime::fromString(lastCheck.toString(), Qt::ISODate);
