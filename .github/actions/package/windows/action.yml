@@ -119,6 +119,16 @@ runs:
 
         Get-ChildItem ${{ env.INSTALL_PORTABLE_DIR }} -Recurse | ForEach FullName | Resolve-Path -Relative | %{ $_.TrimStart('.\') } | %{ $_.TrimStart('${{ env.INSTALL_PORTABLE_DIR }}') } | %{ $_.TrimStart('\') } | Out-File -FilePath ${{ env.INSTALL_DIR }}/manifest.txt
 
+    - name: Bundle MSVC runtime
+      if: ${{ inputs.msystem == '' }}
+      shell: pwsh
+      run: |
+        $dlls = "vcruntime140.dll","vcruntime140_1.dll","msvcp140.dll","msvcp140_1.dll","msvcp140_2.dll","concrt140.dll"
+        foreach ($d in $dlls) {
+          Copy-Item "$env:SystemRoot\System32\$d" -Destination "install\" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$env:SystemRoot\System32\$d" -Destination "install-portable\" -Force -ErrorAction SilentlyContinue
+        }
+    
     - name: Package (installer)
       shell: pwsh
       env:
