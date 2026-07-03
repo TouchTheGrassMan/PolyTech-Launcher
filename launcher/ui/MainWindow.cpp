@@ -97,6 +97,7 @@
 #include "ui/dialogs/AboutDialog.h"
 #include "ui/dialogs/CopyInstanceDialog.h"
 #include "ui/dialogs/CreateShortcutDialog.h"
+#include "ui/dialogs/ChangeSkinDialog.h"
 #include "ui/dialogs/CustomMessageBox.h"
 #include "ui/dialogs/ExportInstanceDialog.h"
 #include "ui/dialogs/ExportPackDialog.h"
@@ -1638,6 +1639,15 @@ void MainWindow::on_actionCreateInstanceShortcut_triggered()
     if (!shortcutDlg.exec())
         return;
     shortcutDlg.createShortcut();
+}
+
+void MainWindow::on_actionChangeSkin_triggered()
+{
+    if (!m_selectedInstance)
+        return;
+
+    ChangeSkinDialog dlg(m_selectedInstance, this);
+    dlg.exec();
 }
 
 void MainWindow::taskEnd()

@@ -168,6 +168,7 @@ class MainWindow : public QMainWindow {
     void on_actionEditInstance_triggered();
 
     void on_actionCreateInstanceShortcut_triggered();
+    void on_actionChangeSkin_triggered();
 
     void taskEnd();
 

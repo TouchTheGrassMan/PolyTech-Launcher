@@ -1067,6 +1067,10 @@ SET(LAUNCHER_SOURCES
     ui/dialogs/CopyInstanceDialog.h
     ui/dialogs/CreateShortcutDialog.cpp
     ui/dialogs/CreateShortcutDialog.h
+    ui/dialogs/ChangeSkinDialog.cpp
+    ui/dialogs/ChangeSkinDialog.h
+    ui/dialogs/SkinPreview3D.cpp
+    ui/dialogs/SkinPreview3D.h
     ui/dialogs/CustomMessageBox.cpp
     ui/dialogs/CustomMessageBox.h
     ui/dialogs/ExportInstanceDialog.cpp

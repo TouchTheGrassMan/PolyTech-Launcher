@@ -123,6 +123,7 @@
    <addaction name="actionCopyInstance"/>
    <addaction name="actionDeleteInstance"/>
    <addaction name="actionCreateInstanceShortcut"/>
+   <addaction name="actionChangeSkin"/>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
@@ -492,6 +493,17 @@
    </property>
    <property name="toolTip">
     <string>Creates a shortcut on a selected folder to launch the selected instance.</string>
+   </property>
+  </action>
+  <action name="actionChangeSkin">
+   <property name="icon">
+    <iconset theme="settings"/>
+   </property>
+   <property name="text">
+    <string>Сменить скин</string>
+   </property>
+   <property name="toolTip">
+    <string>Выбрать файл скина для отправки на сервер.</string>
    </property>
   </action>
   <action name="actionNoAccountsAdded">
