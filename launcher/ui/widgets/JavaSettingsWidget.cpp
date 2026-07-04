@@ -161,6 +161,7 @@ void JavaSettingsWidget::loadSettings()
     }
     m_ui->permGenSpinBox->setValue(settings->get("PermGen").toInt());
     m_ui->lowMemWarningCheckBox->setChecked(settings->get("LowMemWarning").toBool());
+    m_ui->autoMemCheckBox->setChecked(settings->get("AutoMemAlloc").toBool());
 
     // Java arguments
     m_ui->javaArgumentsGroupBox->setChecked(m_instance == nullptr || settings->get("OverrideJavaArgs").toBool());
@@ -226,11 +227,13 @@ void JavaSettingsWidget::saveSettings()
         }
         settings->set("PermGen", m_ui->permGenSpinBox->value());
         settings->set("LowMemWarning", m_ui->lowMemWarningCheckBox->isChecked());
+        settings->set("AutoMemAlloc", m_ui->autoMemCheckBox->isChecked());
     } else {
         settings->reset("MinMemAlloc");
         settings->reset("MaxMemAlloc");
         settings->reset("PermGen");
         settings->reset("LowMemWarning");
+        settings->reset("AutoMemAlloc");
     }
 
     // Java arguments

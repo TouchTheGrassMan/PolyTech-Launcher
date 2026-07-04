@@ -343,6 +343,16 @@
        </layout>
       </item>
       <item>
+       <widget class="QCheckBox" name="autoMemCheckBox">
+        <property name="toolTip">
+         <string>Если включено, максимальный объём памяти выставляется автоматически из свободной ОЗУ в момент запуска игры, а значение выше игнорируется.</string>
+        </property>
+        <property name="text">
+         <string>Автоматически подбирать максимум памяти по доступной при запуске</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QCheckBox" name="lowMemWarningCheckBox">
         <property name="text">
          <string>Warn when there is not enough memory available</string>

@@ -37,6 +37,7 @@
 
 #include "MinecraftInstance.h"
 #include "Application.h"
+#include "HardwareInfo.h"
 #include "BuildConfig.h"
 #include "Json.h"
 #include "QObjectPtr.h"
@@ -216,6 +217,7 @@ void MinecraftInstance::loadSpecificSettings()
         m_settings->registerOverride(global_settings->getSetting("MaxMemAlloc"), memorySetting);
         m_settings->registerOverride(global_settings->getSetting("PermGen"), memorySetting);
         m_settings->registerOverride(global_settings->getSetting("LowMemWarning"), memorySetting);
+        m_settings->registerOverride(global_settings->getSetting("AutoMemAlloc"), memorySetting);
 
         // Native library workarounds
         auto nativeLibraryWorkaroundsOverride = m_settings->registerSetting("OverrideNativeWorkarounds", false);
@@ -618,6 +620,22 @@ QStringList MinecraftInstance::javaArguments()
 
     int min = settings()->get("MinMemAlloc").toInt();
     int max = settings()->get("MaxMemAlloc").toInt();
+
+    if (settings()->get("AutoMemAlloc").toBool()) {
+        // Auto-size the maximum heap from the RAM free at launch time.
+        // Tweak these three numbers if you want a different policy.
+        const uint64_t reserveMiB = 2048;  // keep this much free for the OS and other apps
+        const uint64_t capMiB = 16384;      // beyond this, extra heap mostly just hurts GC
+        const uint64_t floorMiB = 2048;    // sane minimum for a modded pack
+
+        const uint64_t avail = HardwareInfo::availableRamMiB();
+        uint64_t target = avail > reserveMiB ? (avail - reserveMiB) : (avail / 2);
+        target = qBound(floorMiB, target, capMiB);
+        target = qMin(target, avail);  // never ask for more than is actually free
+        max = static_cast<int>(target);
+        min = qMin(min, max);          // keep the initial heap <= the maximum
+    }
+
     if (min < max) {
         args << QString("-Xms%1m").arg(min);
         args << QString("-Xmx%1m").arg(max);
