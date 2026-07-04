@@ -8,7 +8,7 @@ if(UNIX)
     endif()
 endif()
 
-set(Launcher_CommonName "PolyTehc-Launcher")
+set(Launcher_CommonName "PolyTech-Launcher")
 set(Launcher_DisplayName "PolyTech MC")
 set(Launcher_AppID "io.github.elyprismlauncher.ElyPrismLauncher")
 set(Launcher_Domain "pineconemc.ru")
