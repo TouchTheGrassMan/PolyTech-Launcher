@@ -9,6 +9,8 @@ class QLabel;
 class QListWidget;
 class QRadioButton;
 class QPushButton;
+class QDragEnterEvent;
+class QDropEvent;
 class SkinPreview3D;
 
 /**
@@ -27,6 +29,10 @@ class ChangeSkinDialog : public QDialog {
     Q_OBJECT
    public:
     explicit ChangeSkinDialog(BaseInstance* instance, QWidget* parent = nullptr);
+
+   protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
    private slots:
     void addSkin();
@@ -53,6 +59,7 @@ class ChangeSkinDialog : public QDialog {
     void refreshList();
     void updatePreview();
     int currentIndex() const;
+    bool addSkinFromFile(const QString& file, const QString& name);
 
     BaseInstance* m_instance;
     QString m_gameRoot;

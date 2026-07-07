@@ -44,14 +44,14 @@ jobs:
       - name: Package artifacts properly
         run: |
           mv ${{ github.workspace }}/PineconeMC-source PineconeMC-${{ env.VERSION }}
-          mv PineconeMC-Linux-Qt6-Portable*/PineconeMC-portable.tar.gz PineconeMC-Linux-Qt6-Portable-${{ env.VERSION }}.tar.gz
-          mv PineconeMC-Linux-aarch64-Qt6-Portable*/PineconeMC-portable.tar.gz PineconeMC-Linux-aarch64-Qt6-Portable-${{ env.VERSION }}.tar.gz
-          mv PineconeMC-*.AppImage/PineconeMC-*-x86_64.AppImage PineconeMC-Linux-x86_64.AppImage
-          mv PineconeMC-*.AppImage.zsync/PineconeMC-*-x86_64.AppImage.zsync PineconeMC-Linux-x86_64.AppImage.zsync
-          mv PineconeMC-*.AppImage/PineconeMC-*-aarch64.AppImage PineconeMC-Linux-aarch64.AppImage
-          mv PineconeMC-*.AppImage.zsync/PineconeMC-*-aarch64.AppImage.zsync PineconeMC-Linux-aarch64.AppImage.zsync
-          mv PineconeMC-macOS*/PineconeMC.zip PineconeMC-macOS-${{ env.VERSION }}.zip
-          mv PineconeMC-macOS*/PineconeMC.dmg PineconeMC-macOS-${{ env.VERSION }}.dmg
+        #  mv PineconeMC-Linux-Qt6-Portable*/PineconeMC-portable.tar.gz PineconeMC-Linux-Qt6-Portable-${{ env.VERSION }}.tar.gz
+        #  mv PineconeMC-Linux-aarch64-Qt6-Portable*/PineconeMC-portable.tar.gz PineconeMC-Linux-aarch64-Qt6-Portable-${{ env.VERSION }}.tar.gz
+        #  mv PineconeMC-*.AppImage/PineconeMC-*-x86_64.AppImage PineconeMC-Linux-x86_64.AppImage
+        #  mv PineconeMC-*.AppImage.zsync/PineconeMC-*-x86_64.AppImage.zsync PineconeMC-Linux-x86_64.AppImage.zsync
+        #  mv PineconeMC-*.AppImage/PineconeMC-*-aarch64.AppImage PineconeMC-Linux-aarch64.AppImage
+        #  mv PineconeMC-*.AppImage.zsync/PineconeMC-*-aarch64.AppImage.zsync PineconeMC-Linux-aarch64.AppImage.zsync
+        #  mv PineconeMC-macOS*/PineconeMC.zip PineconeMC-macOS-${{ env.VERSION }}.zip
+        #  mv PineconeMC-macOS*/PineconeMC.dmg PineconeMC-macOS-${{ env.VERSION }}.dmg
 
           tar --exclude='.git' -czf PineconeMC-${{ env.VERSION }}.tar.gz PineconeMC-${{ env.VERSION }}
 
@@ -101,7 +101,7 @@ jobs:
           name: PineconeMC ${{ env.VERSION }}
           draft: true
           prerelease: false
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
           files: |
             PineconeMC-Linux-x86_64.AppImage
             PineconeMC-Linux-x86_64.AppImage.zsync

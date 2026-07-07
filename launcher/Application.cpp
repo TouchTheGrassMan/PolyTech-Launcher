@@ -90,6 +90,7 @@
 #include <QCommandLineParser>
 #include <QDebug>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QFileOpenEvent>
 #include <QIcon>
@@ -993,6 +994,41 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         }
         m_instances.reset(new InstanceList(m_settings.get(), instDir, this));
         connect(InstDirSetting.get(), &Setting::SettingChanged, m_instances.get(), &InstanceList::on_InstFolderChanged);
+
+        // A default "PolyTech" instance is baked into the binary as a Qt resource.
+        // Extract it whenever it's missing (fresh install, or someone removed it), so
+        // the launcher always ships ready to play. Mods are pulled by its packwiz
+        // pre-launch command on first launch, so the embedded instance stays tiny.
+        {
+            const QString defInst = FS::PathCombine(instDir, "PolyTech");
+            // Re-create if the core file is missing (handles an empty/partial folder).
+            if (!QFile::exists(FS::PathCombine(defInst, "instance.cfg"))) {
+                if (!QFile::exists(QStringLiteral(":/default_instance/instance.cfg"))) {
+                    qWarning() << "Bundled default instance resource is missing - is Q_INIT_RESOURCE(default_instance) present?";
+                } else {
+                    const QString defMc = FS::PathCombine(defInst, ".minecraft");
+                    QDir().mkpath(defMc);
+
+                    auto extract = [](const QString& res, const QString& dst) {
+                        QFile::remove(dst);
+                        if (QFile::copy(res, dst)) {
+                            // Files copied out of resources are read-only; make them writable.
+                            QFile::setPermissions(dst, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadUser |
+                                                           QFileDevice::WriteUser | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+                        } else {
+                            qWarning() << "Failed to extract bundled instance file to" << dst;
+                        }
+                    };
+                    extract(QStringLiteral(":/default_instance/instance.cfg"), FS::PathCombine(defInst, "instance.cfg"));
+                    extract(QStringLiteral(":/default_instance/mmc-pack.json"), FS::PathCombine(defInst, "mmc-pack.json"));
+                    extract(QStringLiteral(":/default_instance/packwiz-installer-bootstrap.jar"),
+                            FS::PathCombine(defMc, "packwiz-installer-bootstrap.jar"));
+
+                    qInfo() << "Created bundled default instance at" << defInst;
+                }
+            }
+        }
+
         qInfo() << "Loading Instances...";
         m_instances->loadList();
         qInfo() << "<> Instances loaded.";

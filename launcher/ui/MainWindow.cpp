@@ -1492,6 +1492,14 @@ void MainWindow::on_actionDeleteInstance_triggered()
         return;
     }
 
+    // The bundled default instance is protected and cannot be deleted.
+    if (m_selectedInstance->id() == QLatin1String("PolyTech")) {
+        CustomMessageBox::selectable(this, tr("Экземпляр защищён"), tr("Этот экземпляр нельзя удалить."), QMessageBox::Information,
+                                     QMessageBox::Ok)
+            ->exec();
+        return;
+    }
+
     if (m_selectedInstance->isRunning()) {
         CustomMessageBox::selectable(this, tr("Cannot Delete Running Instance"),
                                      tr("The selected instance is currently running and cannot be deleted. Please stop the instance before "

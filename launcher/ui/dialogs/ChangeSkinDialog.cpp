@@ -3,6 +3,8 @@
 #include <QDateTime>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -22,10 +24,12 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPixmap>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSize>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include "BaseInstance.h"
@@ -48,6 +52,7 @@ ChangeSkinDialog::ChangeSkinDialog(BaseInstance* instance, QWidget* parent) : QD
 {
     setWindowTitle(tr("Скины"));
     setModal(true);
+    setAcceptDrops(true);
     resize(560, 400);
 
     if (m_instance)
@@ -234,8 +239,18 @@ void ChangeSkinDialog::refreshList()
     if (m_skins.isEmpty()) {
         m_preview->clearSkin();
     } else {
-        if (keep < 0 || keep >= m_skins.size())
+        if (keep < 0) {
+            // On open (nothing selected yet), preselect the active skin.
             keep = 0;
+            for (int i = 0; i < m_skins.size(); ++i) {
+                if (m_skins[i].id == m_activeId) {
+                    keep = i;
+                    break;
+                }
+            }
+        } else if (keep >= m_skins.size()) {
+            keep = m_skins.size() - 1;
+        }
         m_list->setCurrentRow(keep);  // triggers onSelectionChanged -> updatePreview
     }
 
@@ -289,11 +304,6 @@ void ChangeSkinDialog::onModelToggled()
 
 void ChangeSkinDialog::addSkin()
 {
-    if (m_gameRoot.isEmpty()) {
-        QMessageBox::warning(this, tr("Ошибка"), tr("Не удалось определить папку игры для этого экземпляра."));
-        return;
-    }
-
     QString file = QFileDialog::getOpenFileName(this, tr("Выберите файл скина"), QString(), tr("Изображения PNG (*.png)"));
     if (file.isEmpty())
         return;
@@ -303,28 +313,70 @@ void ChangeSkinDialog::addSkin()
     QString name = QInputDialog::getText(this, tr("Имя скина"), tr("Название:"), QLineEdit::Normal, suggested, &ok);
     if (!ok)
         return;
-    if (name.trimmed().isEmpty())
-        name = suggested;
 
+    addSkinFromFile(file, name);
+}
+
+bool ChangeSkinDialog::addSkinFromFile(const QString& file, const QString& name)
+{
+    if (m_gameRoot.isEmpty()) {
+        QMessageBox::warning(this, tr("Ошибка"), tr("Не удалось определить папку игры для этого экземпляра."));
+        return false;
+    }
     if (!QDir().mkpath(skinsDir())) {
         QMessageBox::warning(this, tr("Ошибка"), tr("Не удалось создать папку для скинов."));
-        return;
+        return false;
     }
 
+    // Unique id even when several files are added within the same millisecond.
+    const qint64 base = QDateTime::currentMSecsSinceEpoch();
+    QString id = QString::number(base);
+    for (int n = 1; QFile::exists(pngPathFor(id)); ++n)
+        id = QString::number(base) + QStringLiteral("_") + QString::number(n);
+
     SkinEntry e;
-    e.id = QString::number(QDateTime::currentMSecsSinceEpoch());
-    e.name = name.trimmed();
+    e.id = id;
+    e.name = name.trimmed().isEmpty() ? QFileInfo(file).completeBaseName() : name.trimmed();
     e.model = QStringLiteral("classic");
 
     if (!QFile::copy(file, pngPathFor(e.id))) {
         QMessageBox::warning(this, tr("Ошибка"), tr("Не удалось скопировать файл скина."));
-        return;
+        return false;
     }
 
     m_skins.append(e);
     saveLibrary();
     refreshList();
     m_list->setCurrentRow(m_skins.size() - 1);
+    return true;
+}
+
+void ChangeSkinDialog::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (!event->mimeData()->hasUrls())
+        return;
+    for (const QUrl& url : event->mimeData()->urls()) {
+        if (url.isLocalFile() && url.toLocalFile().endsWith(QStringLiteral(".png"), Qt::CaseInsensitive)) {
+            event->acceptProposedAction();
+            return;
+        }
+    }
+}
+
+void ChangeSkinDialog::dropEvent(QDropEvent* event)
+{
+    int added = 0;
+    for (const QUrl& url : event->mimeData()->urls()) {
+        if (!url.isLocalFile())
+            continue;
+        const QString path = url.toLocalFile();
+        if (!path.endsWith(QStringLiteral(".png"), Qt::CaseInsensitive))
+            continue;
+        if (addSkinFromFile(path, QFileInfo(path).completeBaseName()))
+            ++added;
+    }
+    if (added > 0)
+        event->acceptProposedAction();
 }
 
 void ChangeSkinDialog::renameSkin()
