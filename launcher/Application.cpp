@@ -755,8 +755,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_settings->registerSetting("LastHostname", "");
         m_settings->registerSetting("JvmArgs", "");
         m_settings->registerSetting("UseOptimizedJvmArgs", true);
-        const auto defaultGCPreset = m_settings->get("MaxMemAlloc").toInt() >= 4096 ? "ZGC" : "G1GC";
-        m_settings->registerSetting("GarbageCollectorPreset", defaultGCPreset);
+        m_settings->registerSetting("GarbageCollectorPreset", "G1GC");
         m_settings->registerSetting("IgnoreJavaCompatibility", false);
         m_settings->registerSetting("IgnoreJavaWizard", false);
         auto defaultEnableAutoJava = m_settings->get("JavaPath").toString().isEmpty();
@@ -956,6 +955,19 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     // Instance icons
     {
         auto setting = APPLICATION->settings()->getSetting("IconsDir");
+
+        // Extract the bundled default-instance icon so IconList picks it up on scan.
+        {
+            const QString iconsDir = setting->get().toString();
+            const QString iconDst = FS::PathCombine(iconsDir, "polytech.png");
+            if (!QFile::exists(iconDst) && QFile::exists(QStringLiteral(":/default_instance/icon.png"))) {
+                QDir().mkpath(iconsDir);
+                if (QFile::copy(QStringLiteral(":/default_instance/icon.png"), iconDst))
+                    QFile::setPermissions(iconDst, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadUser |
+                                                       QFileDevice::WriteUser | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+            }
+        }
+
         QStringList instFolders = { ":/icons/multimc/32x32/instances/", ":/icons/multimc/50x50/instances/",
                                     ":/icons/multimc/128x128/instances/", ":/icons/multimc/scalable/instances/" };
         m_icons.reset(new IconList(instFolders, setting->get().toString()));
@@ -1001,8 +1013,32 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         // pre-launch command on first launch, so the embedded instance stays tiny.
         {
             const QString defInst = FS::PathCombine(instDir, "PolyTech");
-            // Re-create if the core file is missing (handles an empty/partial folder).
-            if (!QFile::exists(FS::PathCombine(defInst, "instance.cfg"))) {
+            const QString defName = QStringLiteral("PolyTech 1.20.1 Forge");
+
+            // Skip creation if our folder is already there, or if ANY instance already
+            // carries this display name (e.g. one added manually) - avoids a duplicate.
+            bool alreadyExists = QFile::exists(FS::PathCombine(defInst, "instance.cfg"));
+            if (!alreadyExists) {
+                const QDir idir(instDir);
+                for (const QString& sub : idir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+                    QFile cfg(FS::PathCombine(FS::PathCombine(instDir, sub), "instance.cfg"));
+                    if (!cfg.open(QIODevice::ReadOnly | QIODevice::Text))
+                        continue;
+                    while (!cfg.atEnd()) {
+                        const QString line = QString::fromUtf8(cfg.readLine());
+                        if (line.startsWith(QStringLiteral("name="))) {
+                            if (line.mid(5).trimmed() == defName)
+                                alreadyExists = true;
+                            break;
+                        }
+                    }
+                    cfg.close();
+                    if (alreadyExists)
+                        break;
+                }
+            }
+
+            if (!alreadyExists) {
                 if (!QFile::exists(QStringLiteral(":/default_instance/instance.cfg"))) {
                     qWarning() << "Bundled default instance resource is missing - is Q_INIT_RESOURCE(default_instance) present?";
                 } else {

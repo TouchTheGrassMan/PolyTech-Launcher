@@ -25,6 +25,12 @@ EnsureAvailableMemory::EnsureAvailableMemory(LaunchTask* parent, MinecraftInstan
 
 void EnsureAvailableMemory::executeTask()
 {
+    // Auto memory allocation sizes the heap from RAM free at launch, so it never
+    // over-commits - skip the low-memory warning entirely in that mode.
+    if (m_instance->settings()->get("AutoMemAlloc").toBool()) {
+        emitSucceeded();
+        return;
+    }
 #ifdef Q_OS_MACOS
     QString text;
     switch (MacOSHardwareInfo::memoryPressureLevel()) {

@@ -4,5 +4,6 @@
         <file>instance.cfg</file>
         <file>mmc-pack.json</file>
         <file>packwiz-installer-bootstrap.jar</file>
+        <file>icon.png</file>
     </qresource>
 </RCC>

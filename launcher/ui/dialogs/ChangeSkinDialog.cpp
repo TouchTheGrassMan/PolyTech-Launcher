@@ -9,7 +9,6 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFont>
-#include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QIODevice>
@@ -32,6 +31,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include "Application.h"
 #include "BaseInstance.h"
 #include "SkinPreview3D.h"
 
@@ -53,14 +53,27 @@ ChangeSkinDialog::ChangeSkinDialog(BaseInstance* instance, QWidget* parent) : QD
     setWindowTitle(tr("Скины"));
     setModal(true);
     setAcceptDrops(true);
-    resize(560, 400);
+    resize(580, 430);
 
     if (m_instance)
         m_gameRoot = m_instance->gameRoot();
+    m_dataRoot = APPLICATION->dataRoot();
 
-    auto* main = new QHBoxLayout(this);
+    auto* outer = new QVBoxLayout(this);
 
-    // ---- Left: the library list + its buttons ----
+    // Warning shown when the mod isn't installed in this instance.
+    m_modWarning = new QLabel(this);
+    m_modWarning->setWordWrap(true);
+    m_modWarning->setStyleSheet(QStringLiteral("QLabel { color: #d68a00; }"));
+    m_modWarning->setText(
+        tr("⚠ Мод polytechskins не установлен на этом экземпляре — скины не отобразятся, пока он не будет добавлен."));
+    m_modWarning->setVisible(false);
+    outer->addWidget(m_modWarning);
+
+    auto* main = new QHBoxLayout();
+    outer->addLayout(main, 1);
+
+    // ---- Left: the shared library list + its buttons ----
     auto* leftBox = new QVBoxLayout();
     m_list = new QListWidget(this);
     m_list->setIconSize(QSize(32, 32));
@@ -91,21 +104,20 @@ ChangeSkinDialog::ChangeSkinDialog(BaseInstance* instance, QWidget* parent) : QD
     modelRow->addWidget(m_slim);
     rightBox->addWidget(modelGroup);
 
-    m_applyBtn = new QPushButton(tr("Применить как активный"), this);
+    m_applyBtn = new QPushButton(tr("Применить к этому экземпляру"), this);
     rightBox->addWidget(m_applyBtn);
 
-    m_hint = new QLabel(tr("Активный скин отмечен жирным — именно он отправляется на сервер."), this);
+    m_hint = new QLabel(tr("Библиотека скинов общая для всего лаунчера. Активный (жирным) применён к этому экземпляру."), this);
     m_hint->setWordWrap(true);
     rightBox->addWidget(m_hint);
 
-    main->addLayout(rightBox, 1);
-
-    // Close button under the right column.
     auto* closeBox = new QDialogButtonBox(QDialogButtonBox::Close, this);
     if (auto* b = closeBox->button(QDialogButtonBox::Close))
         b->setText(tr("Закрыть"));
     connect(closeBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     rightBox->addWidget(closeBox);
+
+    main->addLayout(rightBox, 1);
 
     connect(addBtn, &QPushButton::clicked, this, &ChangeSkinDialog::addSkin);
     connect(m_renameBtn, &QPushButton::clicked, this, &ChangeSkinDialog::renameSkin);
@@ -116,22 +128,31 @@ ChangeSkinDialog::ChangeSkinDialog(BaseInstance* instance, QWidget* parent) : QD
     connect(m_slim, &QRadioButton::toggled, this, &ChangeSkinDialog::onModelToggled);
 
     loadLibrary();
+    loadActive();
+    checkMod();
     refreshList();
 }
 
-QString ChangeSkinDialog::baseDir() const
+// ---------------- paths ----------------
+
+QString ChangeSkinDialog::libDir() const
+{
+    return QDir(m_dataRoot).filePath(QStringLiteral("polytechskins"));
+}
+
+QString ChangeSkinDialog::libSkinsDir() const
+{
+    return QDir(libDir()).filePath(QStringLiteral("skins"));
+}
+
+QString ChangeSkinDialog::libPngFor(const QString& id) const
+{
+    return QDir(libSkinsDir()).filePath(id + QStringLiteral(".png"));
+}
+
+QString ChangeSkinDialog::instSkinDir() const
 {
     return QDir(m_gameRoot).filePath(QStringLiteral("polytechskins"));
-}
-
-QString ChangeSkinDialog::skinsDir() const
-{
-    return QDir(baseDir()).filePath(QStringLiteral("skins"));
-}
-
-QString ChangeSkinDialog::pngPathFor(const QString& id) const
-{
-    return QDir(skinsDir()).filePath(id + QStringLiteral(".png"));
 }
 
 int ChangeSkinDialog::currentIndex() const
@@ -142,14 +163,13 @@ int ChangeSkinDialog::currentIndex() const
     return row;
 }
 
+// ---------------- global library ----------------
+
 void ChangeSkinDialog::loadLibrary()
 {
     m_skins.clear();
-    m_activeId.clear();
-    if (m_gameRoot.isEmpty())
-        return;
 
-    QFile f(QDir(baseDir()).filePath(QStringLiteral("skins.json")));
+    QFile f(QDir(libDir()).filePath(QStringLiteral("library.json")));
     if (!f.open(QIODevice::ReadOnly))
         return;
     QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
@@ -157,9 +177,7 @@ void ChangeSkinDialog::loadLibrary()
     if (!doc.isObject())
         return;
 
-    QJsonObject root = doc.object();
-    m_activeId = root.value(QStringLiteral("active")).toString();
-    for (const QJsonValue& v : root.value(QStringLiteral("skins")).toArray()) {
+    for (const QJsonValue& v : doc.object().value(QStringLiteral("skins")).toArray()) {
         QJsonObject o = v.toObject();
         SkinEntry e;
         e.id = o.value(QStringLiteral("id")).toString();
@@ -174,9 +192,7 @@ void ChangeSkinDialog::loadLibrary()
 
 void ChangeSkinDialog::saveLibrary()
 {
-    if (m_gameRoot.isEmpty())
-        return;
-    QDir().mkpath(baseDir());
+    QDir().mkpath(libDir());
 
     QJsonArray arr;
     for (const SkinEntry& e : m_skins) {
@@ -187,46 +203,92 @@ void ChangeSkinDialog::saveLibrary()
         arr.append(o);
     }
     QJsonObject root;
-    root.insert(QStringLiteral("active"), m_activeId);
     root.insert(QStringLiteral("skins"), arr);
 
-    QFile f(QDir(baseDir()).filePath(QStringLiteral("skins.json")));
+    QFile f(QDir(libDir()).filePath(QStringLiteral("library.json")));
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
         f.close();
     }
 }
 
-void ChangeSkinDialog::materializeActive()
+// ---------------- per-instance active pointer ----------------
+
+void ChangeSkinDialog::loadActive()
 {
-    // Copy the active skin into skin.png + model.txt (what the mod reads).
-    if (m_activeId.isEmpty() || m_gameRoot.isEmpty())
+    m_activeId.clear();
+    if (m_gameRoot.isEmpty())
+        return;
+    QFile f(QDir(instSkinDir()).filePath(QStringLiteral("active.txt")));
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        m_activeId = QString::fromUtf8(f.readAll()).trimmed();
+        f.close();
+    }
+}
+
+void ChangeSkinDialog::saveActive()
+{
+    if (m_gameRoot.isEmpty())
+        return;
+    QDir().mkpath(instSkinDir());
+    QFile f(QDir(instSkinDir()).filePath(QStringLiteral("active.txt")));
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(m_activeId.toUtf8());
+        f.close();
+    }
+}
+
+void ChangeSkinDialog::materializeToInstance(const QString& id)
+{
+    if (m_gameRoot.isEmpty())
         return;
     int idx = -1;
     for (int i = 0; i < m_skins.size(); ++i)
-        if (m_skins[i].id == m_activeId)
+        if (m_skins[i].id == id)
             idx = i;
     if (idx < 0)
         return;
 
-    QDir().mkpath(baseDir());
-    QString dst = QDir(baseDir()).filePath(QStringLiteral("skin.png"));
+    QDir().mkpath(instSkinDir());
+    const QString dst = QDir(instSkinDir()).filePath(QStringLiteral("skin.png"));
     QFile::remove(dst);
-    QFile::copy(pngPathFor(m_activeId), dst);
+    QFile::copy(libPngFor(id), dst);
 
-    QFile mf(QDir(baseDir()).filePath(QStringLiteral("model.txt")));
+    QFile mf(QDir(instSkinDir()).filePath(QStringLiteral("model.txt")));
     if (mf.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
         mf.write(m_skins[idx].model.toUtf8());
         mf.close();
     }
 }
 
+// ---------------- mod presence ----------------
+
+void ChangeSkinDialog::checkMod()
+{
+    bool found = false;
+    if (!m_gameRoot.isEmpty()) {
+        QDir mods(QDir(m_gameRoot).filePath(QStringLiteral("mods")));
+        if (mods.exists()) {
+            const QStringList jars = mods.entryList(QStringList() << QStringLiteral("*.jar"), QDir::Files);
+            for (const QString& j : jars) {
+                if (j.contains(QStringLiteral("polytechskins"), Qt::CaseInsensitive)) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+    }
+    m_modWarning->setVisible(!found);
+}
+
+// ---------------- list / preview ----------------
+
 void ChangeSkinDialog::refreshList()
 {
     int keep = m_list->currentRow();
     m_list->clear();
     for (const SkinEntry& e : m_skins) {
-        auto* item = new QListWidgetItem(faceIcon(pngPathFor(e.id)), e.name);
+        auto* item = new QListWidgetItem(faceIcon(libPngFor(e.id)), e.name);
         if (e.id == m_activeId) {
             QFont f = item->font();
             f.setBold(true);
@@ -270,7 +332,7 @@ void ChangeSkinDialog::updatePreview()
         return;
     }
 
-    QImage img(pngPathFor(m_skins[idx].id));
+    QImage img(libPngFor(m_skins[idx].id));
     m_preview->setSkin(img, m_skins[idx].model == QLatin1String("slim"));
 
     m_updating = true;
@@ -295,12 +357,13 @@ void ChangeSkinDialog::onModelToggled()
         return;
     m_skins[idx].model = m_slim->isChecked() ? QStringLiteral("slim") : QStringLiteral("classic");
     saveLibrary();
-    // Rebuild the 3D preview so the arm width follows the new model.
-    m_preview->setSkin(QImage(pngPathFor(m_skins[idx].id)), m_slim->isChecked());
-    // If the edited skin is the active one, keep model.txt in sync.
+    m_preview->setSkin(QImage(libPngFor(m_skins[idx].id)), m_slim->isChecked());
+    // Keep this instance's model.txt in sync if the edited skin is the active one here.
     if (m_skins[idx].id == m_activeId)
-        materializeActive();
+        materializeToInstance(m_activeId);
 }
+
+// ---------------- library edits ----------------
 
 void ChangeSkinDialog::addSkin()
 {
@@ -319,19 +382,15 @@ void ChangeSkinDialog::addSkin()
 
 bool ChangeSkinDialog::addSkinFromFile(const QString& file, const QString& name)
 {
-    if (m_gameRoot.isEmpty()) {
-        QMessageBox::warning(this, tr("Ошибка"), tr("Не удалось определить папку игры для этого экземпляра."));
-        return false;
-    }
-    if (!QDir().mkpath(skinsDir())) {
-        QMessageBox::warning(this, tr("Ошибка"), tr("Не удалось создать папку для скинов."));
+    if (!QDir().mkpath(libSkinsDir())) {
+        QMessageBox::warning(this, tr("Ошибка"), tr("Не удалось создать папку библиотеки скинов."));
         return false;
     }
 
     // Unique id even when several files are added within the same millisecond.
     const qint64 base = QDateTime::currentMSecsSinceEpoch();
     QString id = QString::number(base);
-    for (int n = 1; QFile::exists(pngPathFor(id)); ++n)
+    for (int n = 1; QFile::exists(libPngFor(id)); ++n)
         id = QString::number(base) + QStringLiteral("_") + QString::number(n);
 
     SkinEntry e;
@@ -339,7 +398,7 @@ bool ChangeSkinDialog::addSkinFromFile(const QString& file, const QString& name)
     e.name = name.trimmed().isEmpty() ? QFileInfo(file).completeBaseName() : name.trimmed();
     e.model = QStringLiteral("classic");
 
-    if (!QFile::copy(file, pngPathFor(e.id))) {
+    if (!QFile::copy(file, libPngFor(e.id))) {
         QMessageBox::warning(this, tr("Ошибка"), tr("Не удалось скопировать файл скина."));
         return false;
     }
@@ -350,6 +409,54 @@ bool ChangeSkinDialog::addSkinFromFile(const QString& file, const QString& name)
     m_list->setCurrentRow(m_skins.size() - 1);
     return true;
 }
+
+void ChangeSkinDialog::renameSkin()
+{
+    int idx = currentIndex();
+    if (idx < 0)
+        return;
+    bool ok = false;
+    QString name = QInputDialog::getText(this, tr("Переименовать скин"), tr("Новое название:"), QLineEdit::Normal,
+                                         m_skins[idx].name, &ok);
+    if (!ok || name.trimmed().isEmpty())
+        return;
+    m_skins[idx].name = name.trimmed();
+    saveLibrary();
+    refreshList();
+}
+
+void ChangeSkinDialog::removeSkin()
+{
+    int idx = currentIndex();
+    if (idx < 0)
+        return;
+    if (QMessageBox::question(this, tr("Удалить скин"),
+                              tr("Удалить «%1» из общей библиотеки?").arg(m_skins[idx].name)) != QMessageBox::Yes)
+        return;
+
+    QString id = m_skins[idx].id;
+    QFile::remove(libPngFor(id));
+    m_skins.removeAt(idx);
+    if (m_activeId == id) {
+        m_activeId.clear();
+        saveActive();  // this instance no longer points at a removed skin
+    }
+    saveLibrary();
+    refreshList();
+}
+
+void ChangeSkinDialog::applySkin()
+{
+    int idx = currentIndex();
+    if (idx < 0)
+        return;
+    m_activeId = m_skins[idx].id;
+    saveActive();
+    materializeToInstance(m_activeId);
+    refreshList();
+}
+
+// ---------------- drag & drop ----------------
 
 void ChangeSkinDialog::dragEnterEvent(QDragEnterEvent* event)
 {
@@ -377,48 +484,4 @@ void ChangeSkinDialog::dropEvent(QDropEvent* event)
     }
     if (added > 0)
         event->acceptProposedAction();
-}
-
-void ChangeSkinDialog::renameSkin()
-{
-    int idx = currentIndex();
-    if (idx < 0)
-        return;
-    bool ok = false;
-    QString name = QInputDialog::getText(this, tr("Переименовать скин"), tr("Новое название:"), QLineEdit::Normal,
-                                         m_skins[idx].name, &ok);
-    if (!ok || name.trimmed().isEmpty())
-        return;
-    m_skins[idx].name = name.trimmed();
-    saveLibrary();
-    refreshList();
-}
-
-void ChangeSkinDialog::removeSkin()
-{
-    int idx = currentIndex();
-    if (idx < 0)
-        return;
-    if (QMessageBox::question(this, tr("Удалить скин"),
-                              tr("Удалить «%1» из библиотеки?").arg(m_skins[idx].name)) != QMessageBox::Yes)
-        return;
-
-    QString id = m_skins[idx].id;
-    QFile::remove(pngPathFor(id));
-    m_skins.removeAt(idx);
-    if (m_activeId == id)
-        m_activeId.clear();  // skin.png is left as-is until another is applied
-    saveLibrary();
-    refreshList();
-}
-
-void ChangeSkinDialog::applySkin()
-{
-    int idx = currentIndex();
-    if (idx < 0)
-        return;
-    m_activeId = m_skins[idx].id;
-    saveLibrary();
-    materializeActive();
-    refreshList();
 }

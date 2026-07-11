@@ -14,16 +14,19 @@ class QDropEvent;
 class SkinPreview3D;
 
 /**
- * Skin library dialog for an instance.
+ * Skin library dialog.
  *
- * The user keeps a named library of skins under
- *   <gameRoot>/polytechskins/skins/<id>.png
- * described by <gameRoot>/polytechskins/skins.json. Exactly one skin can be
- * "active": applying it copies its PNG to <gameRoot>/polytechskins/skin.png and
- * writes model.txt. The polytechskins mod still reads those two files, so it
- * needs no changes — the library is purely a launcher-side convenience.
+ * The library of named skins is stored ONCE, launcher-wide, under
+ *   <dataRoot>/polytechskins/skins/<id>.png  (+ library.json)
+ * so you never re-upload skins per instance.
  *
- * The preview is 2D for now; a 3D preview replaces it in a later step.
+ * "Applying" a skin materialises it into the CURRENT instance
+ *   <gameRoot>/polytechskins/skin.png (+ model.txt)   <- what the mod reads
+ * and records which library skin is active for that instance in active.txt.
+ * So the pool of skins is shared; the active choice is per-instance.
+ *
+ * If the polytechskins mod isn't present in the instance's mods folder, a
+ * warning is shown, but the library can still be managed.
  */
 class ChangeSkinDialog : public QDialog {
     Q_OBJECT
@@ -49,13 +52,21 @@ class ChangeSkinDialog : public QDialog {
         QString model;  // "classic" or "slim"
     };
 
-    QString baseDir() const;   // <gameRoot>/polytechskins
-    QString skinsDir() const;  // <gameRoot>/polytechskins/skins
-    QString pngPathFor(const QString& id) const;
+    // Global (launcher-wide) library
+    QString libDir() const;       // <dataRoot>/polytechskins
+    QString libSkinsDir() const;  // <dataRoot>/polytechskins/skins
+    QString libPngFor(const QString& id) const;
+
+    // Per-instance folder the mod reads from
+    QString instSkinDir() const;  // <gameRoot>/polytechskins
 
     void loadLibrary();
     void saveLibrary();
-    void materializeActive();  // copy active skin -> skin.png + model.txt
+    void loadActive();  // active skin id for THIS instance
+    void saveActive();
+    void materializeToInstance(const QString& id);  // copy skin -> instance skin.png + model.txt
+    void checkMod();                                // warn if the mod isn't in this instance
+
     void refreshList();
     void updatePreview();
     int currentIndex() const;
@@ -63,13 +74,15 @@ class ChangeSkinDialog : public QDialog {
 
     BaseInstance* m_instance;
     QString m_gameRoot;
-    QVector<SkinEntry> m_skins;
-    QString m_activeId;
-    bool m_updating = false;  // guards radio signals during UI refresh
+    QString m_dataRoot;
+    QVector<SkinEntry> m_skins;  // global library
+    QString m_activeId;          // active id for THIS instance
+    bool m_updating = false;
 
     QListWidget* m_list;
     SkinPreview3D* m_preview;
     QLabel* m_hint;
+    QLabel* m_modWarning;
     QRadioButton* m_classic;
     QRadioButton* m_slim;
     QPushButton* m_renameBtn;

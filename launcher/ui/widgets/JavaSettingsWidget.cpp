@@ -105,6 +105,11 @@ JavaSettingsWidget::JavaSettingsWidget(BaseInstance* instance, QWidget* parent)
 
     connect(m_ui->maxMemSpinBox, &QSpinBox::valueChanged, this, &JavaSettingsWidget::updateThresholds);
     connect(m_ui->minMemSpinBox, &QSpinBox::valueChanged, this, &JavaSettingsWidget::updateThresholds);
+    connect(m_ui->autoMemCheckBox, &QCheckBox::toggled, this, [this](bool on) {
+        m_ui->minMemSpinBox->setDisabled(on);
+        m_ui->maxMemSpinBox->setDisabled(on);
+        updateThresholds();
+    });
 
     connect(m_ui->javaInstallationGroupBox, &QGroupBox::toggled, this, &JavaSettingsWidget::updateLauncherArgs);
     connect(m_ui->javaPathTextBox, &QLineEdit::textChanged, this, &JavaSettingsWidget::updateLauncherArgs);
@@ -162,6 +167,8 @@ void JavaSettingsWidget::loadSettings()
     m_ui->permGenSpinBox->setValue(settings->get("PermGen").toInt());
     m_ui->lowMemWarningCheckBox->setChecked(settings->get("LowMemWarning").toBool());
     m_ui->autoMemCheckBox->setChecked(settings->get("AutoMemAlloc").toBool());
+    m_ui->minMemSpinBox->setDisabled(m_ui->autoMemCheckBox->isChecked());
+    m_ui->maxMemSpinBox->setDisabled(m_ui->autoMemCheckBox->isChecked());
 
     // Java arguments
     m_ui->javaArgumentsGroupBox->setChecked(m_instance == nullptr || settings->get("OverrideJavaArgs").toBool());
@@ -321,6 +328,10 @@ void JavaSettingsWidget::onJavaAutodetect()
 }
 void JavaSettingsWidget::updateThresholds()
 {
+    if (m_ui->autoMemCheckBox->isChecked()) {
+        m_ui->labelMaxMemNotice->hide();
+        return;
+    }
     auto sysMiB = HardwareInfo::totalRamMiB();
     unsigned int maxMem = m_ui->maxMemSpinBox->value();
     unsigned int minMem = m_ui->minMemSpinBox->value();
