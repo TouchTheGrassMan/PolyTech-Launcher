@@ -64,6 +64,8 @@
 #include "ui/pages/global/JavaPage.h"
 #include "ui/pages/global/LanguagePage.h"
 #include "ui/pages/global/LauncherPage.h"
+
+#include "PolyTechRestart.h"
 #include "ui/pages/global/MinecraftPage.h"
 #include "ui/pages/global/ProxyPage.h"
 
@@ -577,6 +579,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         }
 
         qInfo() << "<> Log initialized.";
+        qInfo() << "<> PolyTech: game restart requests from the PolyTech Hub mod are supported.";
     }
 
     {
@@ -1059,6 +1062,13 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
                     extract(QStringLiteral(":/default_instance/mmc-pack.json"), FS::PathCombine(defInst, "mmc-pack.json"));
                     extract(QStringLiteral(":/default_instance/packwiz-installer-bootstrap.jar"),
                             FS::PathCombine(defMc, "packwiz-installer-bootstrap.jar"));
+
+                    // Ship the skins mod so the skin dialog doesn't warn about a missing
+                    // mod before the pack has been downloaded. packwiz replaces this jar
+                    // with the pack's own copy on first launch.
+                    const QString modsDir = FS::PathCombine(defMc, "mods");
+                    QDir().mkpath(modsDir);
+                    extract(QStringLiteral(":/default_instance/polytechskins.jar"), FS::PathCombine(modsDir, "polytechskins.jar"));
 
                     qInfo() << "Created bundled default instance at" << defInst;
                 }
@@ -1718,14 +1728,36 @@ void Application::controllerFinished()
     auto& extras = m_instanceExtras.at(id);
 
     const bool wasSuccessful = controller->wasSuccessful();
+
+    // PolyTech Hub may ask for a restart (see PolyTechRestart.h). Everything needed to
+    // relaunch is read here: once extras.controller is reset, `controller` dangles.
+    BaseInstance* instance = controller->instance();
+    const bool restartRequested = PolyTechRestart::consume(instance, wasSuccessful);
+    const auto relaunchMode = controller->wantedLaunchMode();
+    const auto relaunchTarget = controller->targetToJoin();
+    const auto relaunchAccount = controller->accountToUse();
+    const auto relaunchOfflineName = controller->offlineName();
+
     // on success, do...
-    if (wasSuccessful && controller->instance()->settings()->get("AutoCloseConsole").toBool()) {
+    // Not when restarting: the new launch takes the console window as its parent widget,
+    // and closing it under the new launch would leave that pointer dangling.
+    if (wasSuccessful && !restartRequested && controller->instance()->settings()->get("AutoCloseConsole").toBool()) {
         if (extras.window) {
             QMetaObject::invokeMethod(extras.window, &QWidget::close, Qt::QueuedConnection);
         }
     }
     extras.controller.reset();
     subRunningInstance();
+
+    if (restartRequested) {
+        // launch() locks m_instanceExtrasMutex itself, and QMutex is not recursive.
+        locker.unlock();
+        if (launch(instance, relaunchMode, relaunchTarget, relaunchAccount, relaunchOfflineName)) {
+            return;
+        }
+        qWarning() << "PolyTech: could not relaunch instance" << id;
+        // fall through: behave as after a normal exit
+    }
 
     // quit when there are no more windows.
     if (shouldExitNow()) {

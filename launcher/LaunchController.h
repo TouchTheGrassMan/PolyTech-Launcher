@@ -70,6 +70,13 @@ class LaunchController : public Task {
 
     QString id() const { return m_instance->id(); }
 
+    // Read back by Application::controllerFinished to relaunch with the same parameters
+    // when the PolyTech Hub mod requests a restart (see PolyTechRestart.h).
+    LaunchMode wantedLaunchMode() const { return m_wantedLaunchMode; }
+    MinecraftTarget::Ptr targetToJoin() const { return m_targetToJoin; }
+    MinecraftAccountPtr accountToUse() const { return m_accountToUse; }
+    QString offlineName() const { return m_offlineName; }
+
     bool abort() override;
 
    private:

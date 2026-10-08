@@ -36,6 +36,7 @@
 #include <QNetworkProxy>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QDir>
 #include <QProcess>
 #include <QProgressDialog>
 #include <memory>
@@ -921,21 +922,49 @@ void PrismUpdaterApp::unpackAndInstall(QFileInfo archive)
     backupAppDir();
 
     if (auto loc = unpackArchive(archive)) {
+#if defined Q_OS_WIN
+        // On Windows the two-stage exe handoff is unreliable: a freshly-unpacked,
+        // unsigned updater .exe is blocked by SmartScreen/Defender ("Unknown error"),
+        // and Qt DLLs that are still loaded can't be replaced. Instead we hand off to
+        // a tiny batch script run by cmd.exe (which is signed and loads none of our
+        // DLLs): it closes the launcher, copies the new files over the install, then
+        // restarts it. robocopy retries locked files, so a transient lock no longer
+        // leaves the app without its executable.
+        const QString src = QDir::toNativeSeparators(loc.value().absolutePath());
+        const QString dst = QDir::toNativeSeparators(m_rootPath);
+        const QString launcherExe = QStringLiteral("%1.exe").arg(BuildConfig.LAUNCHER_APP_BINARY_NAME);
+        const QString updaterExe = QStringLiteral("%1_updater.exe").arg(BuildConfig.LAUNCHER_APP_BINARY_NAME);
+        const QString exe = QDir::toNativeSeparators(FS::PathCombine(m_rootPath, launcherExe));
+        const QString batPath = FS::PathCombine(m_dataPath, "prism_launcher_update.bat");
+
+        QString bat;
+        bat += QStringLiteral("@echo off\r\n");
+        bat += QStringLiteral("echo Updating %1, please wait...\r\n").arg(BuildConfig.LAUNCHER_DISPLAYNAME);
+        bat += QStringLiteral("timeout /t 2 /nobreak >nul 2>&1\r\n");
+        bat += QStringLiteral("taskkill /IM \"%1\" /F >nul 2>&1\r\n").arg(launcherExe);
+        bat += QStringLiteral("taskkill /IM \"%1\" /F >nul 2>&1\r\n").arg(updaterExe);
+        bat += QStringLiteral("timeout /t 1 /nobreak >nul 2>&1\r\n");
+        bat += QStringLiteral("robocopy \"%1\" \"%2\" /E /R:20 /W:1 >nul\r\n").arg(src, dst);
+        bat += QStringLiteral("rmdir /s /q \"%1\" >nul 2>&1\r\n").arg(src);
+        bat += QStringLiteral("start \"\" \"%1\"\r\n").arg(exe);
+        bat += QStringLiteral("del \"%~f0\" >nul 2>&1\r\n");
+
+        FS::write(batPath, bat.toUtf8());
+
+        logUpdate(tr("Starting batch updater at '%1'").arg(batPath));
+        if (!QProcess::startDetached(QStringLiteral("cmd.exe"), { QStringLiteral("/c"), QDir::toNativeSeparators(batPath) }, m_rootPath)) {
+            logUpdate(tr("Failed to launch batch updater at '%1'").arg(batPath));
+            return exit(10);
+        }
+        return exit();  // the batch script takes over now
+#else
         auto marker_file_path = loc.value().absoluteFilePath(".prism_launcher_updater_unpack.marker");
         FS::write(marker_file_path, m_rootPath.toUtf8());
 
         QProcess proc = QProcess();
 
         auto exe_name = QStringLiteral("%1_updater").arg(BuildConfig.LAUNCHER_APP_BINARY_NAME);
-#if defined Q_OS_WIN32
-        exe_name.append(".exe");
-
-        auto env = QProcessEnvironment::systemEnvironment();
-        env.insert("__COMPAT_LAYER", "RUNASINVOKER");
-        proc.setProcessEnvironment(env);
-#else
         exe_name.prepend("bin/");
-#endif
 
         auto new_updater_path = loc.value().absoluteFilePath(exe_name);
         logUpdate(tr("Starting new updater at '%1'").arg(new_updater_path));
@@ -944,6 +973,7 @@ void PrismUpdaterApp::unpackAndInstall(QFileInfo archive)
             return exit(10);
         }
         return exit();  // up to the new updater now
+#endif
     }
     return exit(1);  // unpack failure
 }

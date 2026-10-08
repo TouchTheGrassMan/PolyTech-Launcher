@@ -19,8 +19,15 @@
 #include "QuitAfterGameStop.h"
 #include <launch/LaunchTask.h>
 #include "Application.h"
+#include "PolyTechRestart.h"
 
 void QuitAfterGameStop::executeTask()
 {
+    // The PolyTech Hub mod asked for a restart: keep the launcher open,
+    // Application::controllerFinished will launch the game again.
+    if (PolyTechRestart::isRequested(m_parent->instance())) {
+        emitSucceeded();
+        return;
+    }
     APPLICATION->quit();
 }

@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: "true"
-          path: "PineconeMC-source"
+          path: "PolyTech-Launcher-source"
       - name: Download artifacts
         uses: actions/download-artifact@v8
       - name: Grab and store version
@@ -43,43 +43,43 @@ jobs:
           echo "VERSION=$tag_name" >> $GITHUB_ENV
       - name: Package artifacts properly
         run: |
-          mv ${{ github.workspace }}/PineconeMC-source PineconeMC-${{ env.VERSION }}
+          mv ${{ github.workspace }}/PolyTech-Launcher-source PolyTech-Launcher-${{ env.VERSION }}
 
-          tar --exclude='.git' -czf PineconeMC-${{ env.VERSION }}.tar.gz PineconeMC-${{ env.VERSION }}
+          tar --exclude='.git' -czf PolyTech-Launcher-${{ env.VERSION }}.tar.gz PolyTech-Launcher-${{ env.VERSION }}
 
-          for d in PineconeMC-Windows-MSVC*; do
+          for d in PolyTech-Launcher-Windows-MSVC*; do
             cd "${d}" || continue
             LEGACY="$(echo -n ${d} | grep -o Legacy || true)"
             ARM64="$(echo -n ${d} | grep -o arm64 || true)"
             INST="$(echo -n ${d} | grep -o Setup || true)"
             PORT="$(echo -n ${d} | grep -o Portable || true)"
-            NAME="PineconeMC-Windows-MSVC"
+            NAME="PolyTech-Launcher-Windows-MSVC"
             test -z "${LEGACY}" || NAME="${NAME}-Legacy"
             test -z "${ARM64}" || NAME="${NAME}-arm64"
             test -z "${PORT}" || NAME="${NAME}-Portable"
-            test -z "${INST}" || mv PineconeMC-*.exe ../${NAME}-Setup-${{ env.VERSION }}.exe
+            test -z "${INST}" || mv PolyTech-Launcher-*.exe ../${NAME}-Setup-${{ env.VERSION }}.exe
             test -n "${INST}" || zip -r -9 "../${NAME}-${{ env.VERSION }}.zip" *
             cd ..
           done
 
-          for d in PineconeMC-Windows-MinGW-w64*; do
+          for d in PolyTech-Launcher-Windows-MinGW-w64*; do
             cd "${d}" || continue
             INST="$(echo -n ${d} | grep -o Setup || true)"
             PORT="$(echo -n ${d} | grep -o Portable || true)"
-            NAME="PineconeMC-Windows-MinGW-w64"
+            NAME="PolyTech-Launcher-Windows-MinGW-w64"
             test -z "${PORT}" || NAME="${NAME}-Portable"
-            test -z "${INST}" || mv PineconeMC-*.exe ../${NAME}-Setup-${{ env.VERSION }}.exe
+            test -z "${INST}" || mv PolyTech-Launcher-*.exe ../${NAME}-Setup-${{ env.VERSION }}.exe
             test -n "${INST}" || zip -r -9 "../${NAME}-${{ env.VERSION }}.zip" *
             cd ..
           done
 
-          for d in PineconeMC-Windows-MinGW-arm64*; do
+          for d in PolyTech-Launcher-Windows-MinGW-arm64*; do
             cd "${d}" || continue
             INST="$(echo -n ${d} | grep -o Setup || true)"
             PORT="$(echo -n ${d} | grep -o Portable || true)"
-            NAME="PineconeMC-Windows-MinGW-arm64"
+            NAME="PolyTech-Launcher-Windows-MinGW-arm64"
             test -z "${PORT}" || NAME="${NAME}-Portable"
-            test -z "${INST}" || mv PineconeMC-*.exe ../${NAME}-Setup-${{ env.VERSION }}.exe
+            test -z "${INST}" || mv PolyTech-Launcher-*.exe ../${NAME}-Setup-${{ env.VERSION }}.exe
             test -n "${INST}" || zip -r -9 "../${NAME}-${{ env.VERSION }}.zip" *
             cd ..
           done
@@ -90,29 +90,29 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ github.ref }}
-          name: PineconeMC ${{ env.VERSION }}
+          name: PolyTech-Launcher ${{ env.VERSION }}
           draft: true
           prerelease: false
           fail_on_unmatched_files: false
           files: |
-            PineconeMC-Linux-x86_64.AppImage
-            PineconeMC-Linux-x86_64.AppImage.zsync
-            PineconeMC-Linux-aarch64.AppImage
-            PineconeMC-Linux-aarch64.AppImage.zsync
-            PineconeMC-Linux-Qt6-Portable-${{ env.VERSION }}.tar.gz
-            PineconeMC-Linux-aarch64-Qt6-Portable-${{ env.VERSION }}.tar.gz
-            PineconeMC-Windows-MinGW-w64-${{ env.VERSION }}.zip
-            PineconeMC-Windows-MinGW-w64-Portable-${{ env.VERSION }}.zip
-            PineconeMC-Windows-MinGW-w64-Setup-${{ env.VERSION }}.exe
-            PineconeMC-Windows-MinGW-arm64-${{ env.VERSION }}.zip
-            PineconeMC-Windows-MinGW-arm64-Portable-${{ env.VERSION }}.zip
-            PineconeMC-Windows-MinGW-arm64-Setup-${{ env.VERSION }}.exe
-            PineconeMC-Windows-MSVC-arm64-${{ env.VERSION }}.zip
-            PineconeMC-Windows-MSVC-arm64-Portable-${{ env.VERSION }}.zip
-            PineconeMC-Windows-MSVC-arm64-Setup-${{ env.VERSION }}.exe
-            PineconeMC-Windows-MSVC-${{ env.VERSION }}.zip
-            PineconeMC-Windows-MSVC-Portable-${{ env.VERSION }}.zip
-            PineconeMC-Windows-MSVC-Setup-${{ env.VERSION }}.exe
-            PineconeMC-macOS-${{ env.VERSION }}.zip
-            PineconeMC-macOS-${{ env.VERSION }}.dmg
-            PineconeMC-${{ env.VERSION }}.tar.gz
+            PolyTech-Launcher-Linux-x86_64.AppImage
+            PolyTech-Launcher-Linux-x86_64.AppImage.zsync
+            PolyTech-Launcher-Linux-aarch64.AppImage
+            PolyTech-Launcher-Linux-aarch64.AppImage.zsync
+            PolyTech-Launcher-Linux-Qt6-Portable-${{ env.VERSION }}.tar.gz
+            PolyTech-Launcher-Linux-aarch64-Qt6-Portable-${{ env.VERSION }}.tar.gz
+            PolyTech-Launcher-Windows-MinGW-w64-${{ env.VERSION }}.zip
+            PolyTech-Launcher-Windows-MinGW-w64-Portable-${{ env.VERSION }}.zip
+            PolyTech-Launcher-Windows-MinGW-w64-Setup-${{ env.VERSION }}.exe
+            PolyTech-Launcher-Windows-MinGW-arm64-${{ env.VERSION }}.zip
+            PolyTech-Launcher-Windows-MinGW-arm64-Portable-${{ env.VERSION }}.zip
+            PolyTech-Launcher-Windows-MinGW-arm64-Setup-${{ env.VERSION }}.exe
+            PolyTech-Launcher-Windows-MSVC-arm64-${{ env.VERSION }}.zip
+            PolyTech-Launcher-Windows-MSVC-arm64-Portable-${{ env.VERSION }}.zip
+            PolyTech-Launcher-Windows-MSVC-arm64-Setup-${{ env.VERSION }}.exe
+            PolyTech-Launcher-Windows-MSVC-${{ env.VERSION }}.zip
+            PolyTech-Launcher-Windows-MSVC-Portable-${{ env.VERSION }}.zip
+            PolyTech-Launcher-Windows-MSVC-Setup-${{ env.VERSION }}.exe
+            PolyTech-Launcher-macOS-${{ env.VERSION }}.zip
+            PolyTech-Launcher-macOS-${{ env.VERSION }}.dmg
+            PolyTech-Launcher-${{ env.VERSION }}.tar.gz
