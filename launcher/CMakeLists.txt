@@ -274,6 +274,8 @@ set(MINECRAFT_SOURCES
     minecraft/launch/CreateGameFolders.h
     minecraft/launch/EnsureAvailableMemory.cpp
     minecraft/launch/EnsureAvailableMemory.h
+    minecraft/launch/ApplyGraphicsPreset.cpp
+    minecraft/launch/ApplyGraphicsPreset.h
     minecraft/launch/EnsureOfflineLibraries.cpp
     minecraft/launch/EnsureOfflineLibraries.h
     minecraft/launch/ModMinecraftJar.cpp
@@ -1071,6 +1073,8 @@ SET(LAUNCHER_SOURCES
     ui/dialogs/ChangeSkinDialog.h
     ui/dialogs/SkinPreview3D.cpp
     ui/dialogs/SkinPreview3D.h
+    ui/dialogs/GraphicsPresetDialog.cpp
+    ui/dialogs/GraphicsPresetDialog.h
     ui/dialogs/CustomMessageBox.cpp
     ui/dialogs/CustomMessageBox.h
     ui/dialogs/ExportInstanceDialog.cpp

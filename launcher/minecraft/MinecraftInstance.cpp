@@ -57,6 +57,7 @@
 #include "launch/steps/QuitAfterGameStop.h"
 #include "launch/steps/TextPrint.h"
 
+#include "minecraft/launch/ApplyGraphicsPreset.h"
 #include "minecraft/launch/AutoInstallJava.h"
 #include "minecraft/launch/ClaimAccount.h"
 #include "minecraft/launch/CreateGameFolders.h"
@@ -1242,6 +1243,14 @@ LaunchTask* MinecraftInstance::createLaunchTask(AuthSessionPtr session, Minecraf
     // Scan mods folders for mods
     {
         process->appendStep(makeShared<ScanModFolders>(pptr));
+    }
+
+    // PolyTech: graphics preset chooser on the first launch. Placed after the
+    // pre-launch command (packwiz has downloaded the pack, including the mod the
+    // presets come from) and after the game files are downloaded (the chooser shows
+    // a vanilla texture), but before anything reads the game settings.
+    {
+        process->appendStep(makeShared<ApplyGraphicsPreset>(pptr, this));
     }
 
     // make sure we have enough RAM, warn the user if we don't
