@@ -55,6 +55,13 @@ AppearanceWidget::AppearanceWidget(bool themesOnly, QWidget* parent)
 
     m_defaultFormat = QTextCharFormat(m_ui->consolePreview->currentCharFormat());
 
+    // PolyTech: the cat background easter egg is removed, so are its settings.
+    for (QWidget* w : std::initializer_list<QWidget*>{ m_ui->catPackLabel, m_ui->catPackComboBox, m_ui->catPackFolder,
+                                                       m_ui->hideCatButtonCheckBox, m_ui->catOpacityLabel, m_ui->widget_2,
+                                                       m_ui->widget, m_ui->catFitLabel, m_ui->catFitComboBox,
+                                                       m_ui->catPreview })
+        w->hide();
+
     if (themesOnly) {
         m_ui->catPackLabel->hide();
         m_ui->catPackComboBox->hide();

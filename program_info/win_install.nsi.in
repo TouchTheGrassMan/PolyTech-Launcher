@@ -1,6 +1,7 @@
 !include "FileFunc.nsh"
 !include "LogicLib.nsh"
 !include "MUI2.nsh"
+!include "nsDialogs.nsh"
 
 !include "x64.nsh"
 
@@ -11,22 +12,39 @@ Name "@Launcher_DisplayName@"
 InstallDir "$LOCALAPPDATA\Programs\@Launcher_CommonName@"
 InstallDirRegKey HKCU "Software\@Launcher_CommonName@" "InstallDir"
 RequestExecutionLevel user
-OutFile "../PineconeMC-Setup.exe"
+OutFile "../PolyTech-Launcher-Setup.exe"
 
 !define MUI_ICON "../@Launcher_Branding_ICO@"
 
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\@Launcher_CommonName@"
+
+; PolyTech: the installer offers two kinds of install.
+;   portable  - everything (launcher, packs, settings) in the chosen folder, marked by
+;               portable.txt; nothing is registered in Windows.
+;   installed - classic install: Start Menu entry, "Apps & features" entry with an
+;               uninstaller; packs and settings live in %APPDATA%.
+Var InstallMode          ; "portable" / "installed", empty until the type page is left
+Var PreferredMode        ; what the type page preselects
+Var DefaultInstalledDir  ; InstallDir, or the previous install's folder from the registry
+Var DirTopText           ; directory page text, depends on the mode
+Var NoShortcuts          ; /NoShortcuts on the command line
+Var RadioPortable
+Var RadioInstalled
 
 ;--------------------------------
 
 ; Pages
 
 !insertmacro MUI_PAGE_WELCOME
-!define MUI_COMPONENTSPAGE_NODESC
-!insertmacro MUI_PAGE_COMPONENTS
+Page custom ModePageCreate ModePageLeave
+!define MUI_DIRECTORYPAGE_TEXT_TOP "$DirTopText"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN "$InstDir\@Launcher_APP_BINARY_NAME@.exe"
+; The second checkbox of the finish page creates the desktop shortcut (checked by default).
+!define MUI_FINISHPAGE_SHOWREADME ""
+!define MUI_FINISHPAGE_SHOWREADME_TEXT "$(FINISH_DESKTOP)"
+!define MUI_FINISHPAGE_SHOWREADME_FUNCTION CreateDesktopShortcut
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -36,73 +54,49 @@ OutFile "../PineconeMC-Setup.exe"
 
 ; Languages
 
+; PolyTech: languages of our players. English stays first — it is the fallback.
 !insertmacro MUI_LANGUAGE "English"
-!insertmacro MUI_LANGUAGE "French"
-!insertmacro MUI_LANGUAGE "German"
-!insertmacro MUI_LANGUAGE "Spanish"
-!insertmacro MUI_LANGUAGE "SpanishInternational"
-!insertmacro MUI_LANGUAGE "SimpChinese"
-!insertmacro MUI_LANGUAGE "TradChinese"
-!insertmacro MUI_LANGUAGE "Japanese"
-!insertmacro MUI_LANGUAGE "Korean"
-!insertmacro MUI_LANGUAGE "Italian"
-!insertmacro MUI_LANGUAGE "Dutch"
-!insertmacro MUI_LANGUAGE "Danish"
-!insertmacro MUI_LANGUAGE "Swedish"
-!insertmacro MUI_LANGUAGE "Norwegian"
-!insertmacro MUI_LANGUAGE "NorwegianNynorsk"
-!insertmacro MUI_LANGUAGE "Finnish"
-!insertmacro MUI_LANGUAGE "Greek"
 !insertmacro MUI_LANGUAGE "Russian"
-!insertmacro MUI_LANGUAGE "Portuguese"
-!insertmacro MUI_LANGUAGE "PortugueseBR"
-!insertmacro MUI_LANGUAGE "Polish"
 !insertmacro MUI_LANGUAGE "Ukrainian"
-!insertmacro MUI_LANGUAGE "Czech"
-!insertmacro MUI_LANGUAGE "Slovak"
-!insertmacro MUI_LANGUAGE "Croatian"
-!insertmacro MUI_LANGUAGE "Bulgarian"
-!insertmacro MUI_LANGUAGE "Hungarian"
-!insertmacro MUI_LANGUAGE "Thai"
-!insertmacro MUI_LANGUAGE "Romanian"
-!insertmacro MUI_LANGUAGE "Latvian"
-!insertmacro MUI_LANGUAGE "Macedonian"
-!insertmacro MUI_LANGUAGE "Estonian"
-!insertmacro MUI_LANGUAGE "Turkish"
-!insertmacro MUI_LANGUAGE "Lithuanian"
-!insertmacro MUI_LANGUAGE "Slovenian"
-!insertmacro MUI_LANGUAGE "Serbian"
-!insertmacro MUI_LANGUAGE "SerbianLatin"
-!insertmacro MUI_LANGUAGE "Arabic"
-!insertmacro MUI_LANGUAGE "Farsi"
-!insertmacro MUI_LANGUAGE "Hebrew"
-!insertmacro MUI_LANGUAGE "Indonesian"
-!insertmacro MUI_LANGUAGE "Mongolian"
-!insertmacro MUI_LANGUAGE "Luxembourgish"
-!insertmacro MUI_LANGUAGE "Albanian"
-!insertmacro MUI_LANGUAGE "Breton"
 !insertmacro MUI_LANGUAGE "Belarusian"
-!insertmacro MUI_LANGUAGE "Icelandic"
-!insertmacro MUI_LANGUAGE "Malay"
-!insertmacro MUI_LANGUAGE "Bosnian"
-!insertmacro MUI_LANGUAGE "Kurdish"
-!insertmacro MUI_LANGUAGE "Irish"
-!insertmacro MUI_LANGUAGE "Uzbek"
-!insertmacro MUI_LANGUAGE "Galician"
-!insertmacro MUI_LANGUAGE "Afrikaans"
-!insertmacro MUI_LANGUAGE "Catalan"
-!insertmacro MUI_LANGUAGE "Esperanto"
-!insertmacro MUI_LANGUAGE "Asturian"
-!insertmacro MUI_LANGUAGE "Basque"
-!insertmacro MUI_LANGUAGE "Pashto"
-!insertmacro MUI_LANGUAGE "ScotsGaelic"
-!insertmacro MUI_LANGUAGE "Georgian"
-!insertmacro MUI_LANGUAGE "Vietnamese"
-!insertmacro MUI_LANGUAGE "Welsh"
-!insertmacro MUI_LANGUAGE "Armenian"
-!insertmacro MUI_LANGUAGE "Corsican"
-!insertmacro MUI_LANGUAGE "Tatar"
-!insertmacro MUI_LANGUAGE "Hindi"
+
+; PolyTech: texts of our pages. The source is UTF-8 — makensis is run with -INPUTCHARSET UTF8.
+LangString MODE_TITLE ${LANG_ENGLISH} "Installation type"
+LangString MODE_TITLE ${LANG_RUSSIAN} "Тип установки"
+LangString MODE_TITLE ${LANG_UKRAINIAN} "Тип встановлення"
+LangString MODE_TITLE ${LANG_BELARUSIAN} "Тып усталявання"
+LangString MODE_SUBTITLE ${LANG_ENGLISH} "Choose how to install @Launcher_DisplayName@."
+LangString MODE_SUBTITLE ${LANG_RUSSIAN} "Выберите, как установить @Launcher_DisplayName@."
+LangString MODE_SUBTITLE ${LANG_UKRAINIAN} "Оберіть, як встановити @Launcher_DisplayName@."
+LangString MODE_SUBTITLE ${LANG_BELARUSIAN} "Абярыце, як усталяваць @Launcher_DisplayName@."
+LangString MODE_PORTABLE ${LANG_ENGLISH} "Portable"
+LangString MODE_PORTABLE ${LANG_RUSSIAN} "Портативная"
+LangString MODE_PORTABLE ${LANG_UKRAINIAN} "Портативна"
+LangString MODE_PORTABLE ${LANG_BELARUSIAN} "Партатыўная"
+LangString MODE_PORTABLE_DESC ${LANG_ENGLISH} "Everything — the launcher, game packs and settings — is kept in one folder of your choice. The folder can be moved to another drive or PC. Nothing is registered in Windows."
+LangString MODE_PORTABLE_DESC ${LANG_RUSSIAN} "Всё — лаунчер, сборки и настройки — хранится в одной выбранной папке. Её можно перенести на другой диск или компьютер. В Windows ничего не регистрируется."
+LangString MODE_PORTABLE_DESC ${LANG_UKRAINIAN} "Усе — лаунчер, збірки та налаштування — зберігається в одній обраній теці. Її можна перенести на інший диск або комп'ютер. У Windows нічого не реєструється."
+LangString MODE_PORTABLE_DESC ${LANG_BELARUSIAN} "Усё — лаўнчар, зборкі і налады — захоўваецца ў адной абранай тэчцы. Яе можна перанесці на іншы дыск або камп'ютар. У Windows нічога не рэгіструецца."
+LangString MODE_INSTALLED ${LANG_ENGLISH} "Standard"
+LangString MODE_INSTALLED ${LANG_RUSSIAN} "Стационарная"
+LangString MODE_INSTALLED ${LANG_UKRAINIAN} "Стаціонарна"
+LangString MODE_INSTALLED ${LANG_BELARUSIAN} "Стацыянарная"
+LangString MODE_INSTALLED_DESC ${LANG_ENGLISH} "Installed into the system: a Start Menu entry and removal through Apps & features. Game packs and settings are kept in your user profile (%APPDATA%)."
+LangString MODE_INSTALLED_DESC ${LANG_RUSSIAN} "Устанавливается в систему: ярлык в меню «Пуск» и удаление через «Программы и компоненты». Сборки и настройки хранятся в профиле пользователя (%APPDATA%)."
+LangString MODE_INSTALLED_DESC ${LANG_UKRAINIAN} "Встановлюється в систему: ярлик у меню «Пуск» і видалення через «Програми та компоненти». Збірки та налаштування зберігаються в профілі користувача (%APPDATA%)."
+LangString MODE_INSTALLED_DESC ${LANG_BELARUSIAN} "Усталёўваецца ў сістэму: ярлык у меню «Пуск» і выдаленне праз «Праграмы і кампаненты». Зборкі і налады захоўваюцца ў профілі карыстальніка (%APPDATA%)."
+LangString DIR_TOP_PORTABLE ${LANG_ENGLISH} "Choose a folder for the portable launcher. The launcher, game packs and settings will all be kept there."
+LangString DIR_TOP_PORTABLE ${LANG_RUSSIAN} "Выберите папку для портативного лаунчера. В ней будут храниться и лаунчер, и сборки, и настройки."
+LangString DIR_TOP_PORTABLE ${LANG_UKRAINIAN} "Оберіть теку для портативного лаунчера. У ній зберігатимуться і лаунчер, і збірки, і налаштування."
+LangString DIR_TOP_PORTABLE ${LANG_BELARUSIAN} "Абярыце тэчку для партатыўнага лаўнчара. У ёй будуць захоўвацца і лаўнчар, і зборкі, і налады."
+LangString DIR_TOP_INSTALLED ${LANG_ENGLISH} "Choose a folder to install the launcher to. Game packs and settings are kept separately, in your user profile."
+LangString DIR_TOP_INSTALLED ${LANG_RUSSIAN} "Выберите папку для установки лаунчера. Сборки и настройки хранятся отдельно, в профиле пользователя."
+LangString DIR_TOP_INSTALLED ${LANG_UKRAINIAN} "Оберіть теку для встановлення лаунчера. Збірки та налаштування зберігаються окремо, у профілі користувача."
+LangString DIR_TOP_INSTALLED ${LANG_BELARUSIAN} "Абярыце тэчку для ўсталявання лаўнчара. Зборкі і налады захоўваюцца асобна, у профілі карыстальніка."
+LangString FINISH_DESKTOP ${LANG_ENGLISH} "Create a desktop shortcut"
+LangString FINISH_DESKTOP ${LANG_RUSSIAN} "Создать ярлык на рабочем столе"
+LangString FINISH_DESKTOP ${LANG_UKRAINIAN} "Створити ярлик на робочому столі"
+LangString FINISH_DESKTOP ${LANG_BELARUSIAN} "Стварыць ярлык на працоўным стале"
 
 ;--------------------------------
 
@@ -334,6 +328,11 @@ FunctionEnd
 ; The "" makes the section hidden.
 Section "" UninstallPrevious
 
+  ; A portable install must never remove the classic one.
+  ${If} $InstallMode == "portable"
+    Return
+  ${EndIf}
+
   ReadRegStr $0 HKCU "${UNINST_KEY}" "QuietUninstallString"
   ${If} $0 == ""
     ReadRegStr $0 HKCU "${UNINST_KEY}" "UninstallString"
@@ -387,24 +386,35 @@ Section "@Launcher_DisplayName@"
   File /r "styles"
   File /nonfatal /r "tls"
 
+  ${If} $InstallMode == "portable"
+    ; The launcher keeps all its data next to the exe when this file is present.
+    FileOpen $0 "$INSTDIR\portable.txt" w
+    FileClose $0
+    ; Tells the built-in updater which files belong to the launcher.
+    File /nonfatal "manifest.txt"
+    Return
+  ${EndIf}
+
+  ; ---- classic install from here on ----
+
+  ; Installing over a former portable folder: switch it to the classic mode.
+  Delete "$INSTDIR\portable.txt"
+
   ; Write the installation path into the registry
   WriteRegStr HKCU Software\@Launcher_CommonName@ "InstallDir" "$INSTDIR"
 
-  ; Write the URL Handler into registry for curseforge
-  WriteRegStr HKCU Software\Classes\curseforge "URL Protocol" ""
-  WriteRegStr HKCU Software\Classes\curseforge\shell\open\command "" '"$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" "%1"'
+  ; PolyTech: no curseforge:// and prismlauncher:// handlers — they would take over
+  ; links meant for a real CurseForge / Prism Launcher installed on the same PC.
 
-  ; Write the URL Handler into registry for prismlauncher
+  ; Write the URL Handler into registry for the launcher itself
   WriteRegStr HKCU Software\Classes\@Launcher_APP_BINARY_NAME@ "URL Protocol" ""
   WriteRegStr HKCU Software\Classes\@Launcher_APP_BINARY_NAME@\shell\open\command "" '"$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" "%1"'
 
-  ; Write the URL Handler into registry for prismlauncher import
-  WriteRegStr HKCU Software\Classes\prismlauncher "URL Protocol" ""
-  WriteRegStr HKCU Software\Classes\prismlauncher\shell\open\command "" '"$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" "%1"'
 
   ; Write the uninstall keys for Windows
   ; https://learn.microsoft.com/en-us/windows/win32/msi/uninstall-registry-key
   ${GetParameters} $R0
+  ClearErrors  ; the Delete above sets the error flag when portable.txt is absent
   ${GetOptions} $R0 "/NoUninstaller" $R1
   ${If} ${Errors}
     WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" "@Launcher_DisplayName@"
@@ -425,21 +435,85 @@ Section "@Launcher_DisplayName@"
     WriteUninstaller "$INSTDIR\uninstall.exe"
   ${EndIf}
 
-SectionEnd
-
-@Launcher_MSVC_Redist_NSIS_Section@
-
-Section "Start Menu Shortcut" SM_SHORTCUTS
-
-  CreateShortcut "$SMPROGRAMS\@Launcher_DisplayName@.lnk" "$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" "" "$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" 0
+  ; Start Menu entry
+  ${If} $NoShortcuts != "1"
+    CreateShortcut "$SMPROGRAMS\@Launcher_DisplayName@.lnk" "$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" "" "$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" 0
+  ${EndIf}
 
 SectionEnd
 
-Section /o "Desktop Shortcut" DESKTOP_SHORTCUTS
+; PolyTech: no Visual C++ Redistributable download (Launcher_MSVC_Redist_NSIS_Section in
+; the original). The runtime DLLs are bundled with the launcher by CI, so the download,
+; its admin prompt and the leftover vc_redist folder are not needed.
 
+; Finish page checkbox "Create a desktop shortcut".
+Function CreateDesktopShortcut
+  ${If} $NoShortcuts == "1"
+    Return
+  ${EndIf}
+  SetOutPath $INSTDIR  ; becomes the shortcut's working folder
   CreateShortcut "$DESKTOP\@Launcher_DisplayName@.lnk" "$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" "" "$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" 0
+FunctionEnd
 
-SectionEnd
+;--------------------------------
+
+; Installation type page
+
+Function ModePageCreate
+  !insertmacro MUI_HEADER_TEXT "$(MODE_TITLE)" "$(MODE_SUBTITLE)"
+
+  nsDialogs::Create 1018
+  Pop $0
+  ${If} $0 == error
+    Abort
+  ${EndIf}
+
+  ${NSD_CreateRadioButton} 0 0 100% 12u "$(MODE_PORTABLE)"
+  Pop $RadioPortable
+  ${NSD_CreateLabel} 12u 14u -12u 34u "$(MODE_PORTABLE_DESC)"
+  Pop $0
+
+  ${NSD_CreateRadioButton} 0 56u 100% 12u "$(MODE_INSTALLED)"
+  Pop $RadioInstalled
+  ${NSD_CreateLabel} 12u 70u -12u 34u "$(MODE_INSTALLED_DESC)"
+  Pop $0
+
+  ; Coming back to this page keeps the previous choice.
+  StrCpy $1 $InstallMode
+  ${If} $1 == ""
+    StrCpy $1 $PreferredMode
+  ${EndIf}
+  ${If} $1 == "installed"
+    ${NSD_Check} $RadioInstalled
+  ${Else}
+    ${NSD_Check} $RadioPortable
+  ${EndIf}
+
+  nsDialogs::Show
+FunctionEnd
+
+Function ModePageLeave
+  StrCpy $1 $InstallMode
+  ${NSD_GetState} $RadioPortable $0
+  ${If} $0 == ${BST_CHECKED}
+    StrCpy $InstallMode "portable"
+    StrCpy $DirTopText "$(DIR_TOP_PORTABLE)"
+  ${Else}
+    StrCpy $InstallMode "installed"
+    StrCpy $DirTopText "$(DIR_TOP_INSTALLED)"
+  ${EndIf}
+
+  ; First visit or the type changed: suggest the folder that fits it.
+  ; Choosing a folder with "Browse" appends this last part, so a portable install
+  ; always gets a folder of its own instead of spilling over the chosen one.
+  ${If} $1 != $InstallMode
+    ${If} $InstallMode == "portable"
+      StrCpy $INSTDIR "$DESKTOP\@Launcher_CommonName@"
+    ${Else}
+      StrCpy $INSTDIR $DefaultInstalledDir
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
 
 
 !define APPID "@Launcher_CommonName@.App"
@@ -475,6 +549,7 @@ Section "Uninstall"
   Delete $INSTDIR\@Launcher_APP_BINARY_NAME@_filelink.exe
   Delete $INSTDIR\@Launcher_APP_BINARY_NAME@_updater.exe
   Delete $INSTDIR\qt.conf
+  Delete $INSTDIR\qtlogging.ini
   Delete $INSTDIR\*.dll
 
   Delete $INSTDIR\uninstall.exe
@@ -508,10 +583,34 @@ SectionEnd
 ; Extra command line parameters
 
 Function .onInit
-${GetParameters} $R0
-${GetOptions} $R0 "/NoShortcuts" $R1
-${IfNot} ${Errors}
-  !insertmacro UnselectSection ${SM_SHORTCUTS}
-  !insertmacro UnselectSection ${DESKTOP_SHORTCUTS}
-${EndIf}
+  ; InstallDir / InstallDirRegKey are already applied to $INSTDIR here.
+  StrCpy $DefaultInstalledDir $INSTDIR
+  StrCpy $InstallMode ""
+
+  ; Upgrading a classic install (that is also how its updater runs us): preselect it.
+  ; Otherwise portable is the default.
+  ReadRegStr $0 HKCU "Software\@Launcher_CommonName@" "InstallDir"
+  ${If} $0 != ""
+    StrCpy $PreferredMode "installed"
+  ${Else}
+    StrCpy $PreferredMode "portable"
+  ${EndIf}
+
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/NoShortcuts" $R1
+  ${IfNot} ${Errors}
+    StrCpy $NoShortcuts "1"
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $R0 "/Portable" $R1
+  ${IfNot} ${Errors}
+    StrCpy $PreferredMode "portable"
+  ${EndIf}
+  ClearErrors
+
+  ; Silent install (/S, e.g. from the updater) skips the pages: take the preselected type.
+  ${If} ${Silent}
+    StrCpy $InstallMode $PreferredMode
+  ${EndIf}
 FunctionEnd

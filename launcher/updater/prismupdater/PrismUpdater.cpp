@@ -937,15 +937,39 @@ void PrismUpdaterApp::unpackAndInstall(QFileInfo archive)
         const QString exe = QDir::toNativeSeparators(FS::PathCombine(m_rootPath, launcherExe));
         const QString batPath = FS::PathCombine(m_dataPath, "prism_launcher_update.bat");
 
+        const QString logFile = QDir::toNativeSeparators(m_updateLogPath);
+        const QString lockFile = QDir::toNativeSeparators(FS::PathCombine(m_dataPath, ".prism_launcher_update.lock"));
+        const QString successFile = QDir::toNativeSeparators(FS::PathCombine(m_dataPath, ".prism_launcher_update.success"));
+        const QString failFile = QDir::toNativeSeparators(FS::PathCombine(m_dataPath, ".prism_launcher_update.fail"));
+
+        // The script does what the second-stage updater used to do after copying:
+        // leave a .success or .fail marker (the launcher shows "Update succeeded" /
+        // "Update failed" on start) and remove the lock — otherwise the new launcher
+        // finds the lock and reports a failed update even though it went fine.
         QString bat;
         bat += QStringLiteral("@echo off\r\n");
+        // The script is UTF-8: without this, paths with non-ASCII user names
+        // (C:\Users\<cyrillic>) are misread by cmd.
+        bat += QStringLiteral("chcp 65001 >nul\r\n");
         bat += QStringLiteral("echo Updating %1, please wait...\r\n").arg(BuildConfig.LAUNCHER_DISPLAYNAME);
         bat += QStringLiteral("timeout /t 2 /nobreak >nul 2>&1\r\n");
         bat += QStringLiteral("taskkill /IM \"%1\" /F >nul 2>&1\r\n").arg(launcherExe);
         bat += QStringLiteral("taskkill /IM \"%1\" /F >nul 2>&1\r\n").arg(updaterExe);
         bat += QStringLiteral("timeout /t 1 /nobreak >nul 2>&1\r\n");
         bat += QStringLiteral("robocopy \"%1\" \"%2\" /E /R:20 /W:1 >nul\r\n").arg(src, dst);
-        bat += QStringLiteral("rmdir /s /q \"%1\" >nul 2>&1\r\n").arg(src);
+        // robocopy: 0-7 = success (files copied / nothing to copy), 8+ = errors.
+        bat += QStringLiteral("set RC=%ERRORLEVEL%\r\n");
+        bat += QStringLiteral("echo Batch updater: robocopy exit code %RC% >>\"%1\"\r\n").arg(logFile);
+        bat += QStringLiteral("if %RC% GEQ 8 (\r\n");
+        bat += QStringLiteral("  echo There were errors installing the update.>>\"%1\"\r\n").arg(logFile);
+        bat += QStringLiteral("  copy /y \"%1\" \"%2\" >nul\r\n").arg(logFile, failFile);
+        bat += QStringLiteral(") else (\r\n");
+        bat += QStringLiteral("  echo Update succeed.>>\"%1\"\r\n").arg(logFile);
+        bat += QStringLiteral("  copy /y \"%1\" \"%2\" >nul\r\n").arg(logFile, successFile);
+        // Keep the unpacked release on failure: it is the way to recover by hand.
+        bat += QStringLiteral("  rmdir /s /q \"%1\" >nul 2>&1\r\n").arg(src);
+        bat += QStringLiteral(")\r\n");
+        bat += QStringLiteral("del /f /q \"%1\" >nul 2>&1\r\n").arg(lockFile);
         bat += QStringLiteral("start \"\" \"%1\"\r\n").arg(exe);
         bat += QStringLiteral("del \"%~f0\" >nul 2>&1\r\n");
 
@@ -1042,6 +1066,16 @@ void PrismUpdaterApp::backupAppDir()
     auto copy = [this, app_dir, backup_dir](QString to_bak_file) {
         auto rel_path = app_dir.relativeFilePath(to_bak_file);
         auto bak_path = FS::PathCombine(backup_dir, rel_path);
+#if defined Q_OS_WIN
+        // Windows: copy only. The launcher is still running, so most files are
+        // locked and can't be removed anyway; the batch updater overwrites them in
+        // place once it has closed. Removing the few unlocked ones here would only
+        // leave a broken install behind if the copy later failed.
+        logUpdate(tr("Backing up %1").arg(to_bak_file));
+        FS::ensureFilePathExists(bak_path);
+        if (!FS::copy(to_bak_file, bak_path).overwrite(true)())
+            logUpdate(tr("Failed to backup %1 to %2").arg(to_bak_file).arg(bak_path));
+#else
         logUpdate(tr("Backing up and then removing %1").arg(to_bak_file));
         FS::ensureFilePathExists(bak_path);
         auto result = FS::copy(to_bak_file, bak_path).overwrite(true)();
@@ -1051,6 +1085,7 @@ void PrismUpdaterApp::backupAppDir()
             if (!FS::deletePath(to_bak_file))
                 logUpdate(tr("Failed to remove %1").arg(to_bak_file));
         }
+#endif
     };
 
     int i = 0;

@@ -148,7 +148,7 @@ runs:
         Expand-Archive -Path NSISPlugins\NScurl.zip -DestinationPath NSISPlugins\NScurl
 
         cd ${{ env.INSTALL_DIR }}
-        makensis -NOCD "${{ github.workspace }}/${{ env.BUILD_DIR }}/program_info/win_install.nsi"
+        makensis -NOCD -INPUTCHARSET UTF8 "${{ github.workspace }}/${{ env.BUILD_DIR }}/program_info/win_install.nsi"
 
     - name: Sign installer
       if: ${{ env.CI_HAS_ACCESS_TO_AZURE != '' && inputs.azure-client-id != '' }}
@@ -159,7 +159,7 @@ runs:
         certificate-profile-name: PineconeMC
 
         files: |
-          ${{ github.workspace }}\ElyPrismLauncher-Setup.exe
+          ${{ github.workspace }}\PolyTech-Launcher-Setup.exe
 
         # recommended in https://github.com/Azure/artifact-signing-action#timestamping-1
         timestamp-rfc3161: 'http://timestamp.acs.microsoft.com'
