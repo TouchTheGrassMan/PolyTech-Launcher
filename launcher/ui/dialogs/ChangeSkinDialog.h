@@ -1,6 +1,6 @@
 #pragma once
 
-#include <QDialog>
+#include "ui/obsidium/ObsidiumDialog.h"
 #include <QString>
 #include <QVector>
 
@@ -28,10 +28,12 @@ class SkinPreview3D;
  * If the polytechskins mod isn't present in the instance's mods folder, a
  * warning is shown, but the library can still be managed.
  */
-class ChangeSkinDialog : public QDialog {
+class ChangeSkinDialog : public ObsidiumDialog {
     Q_OBJECT
    public:
     explicit ChangeSkinDialog(BaseInstance* instance, QWidget* parent = nullptr);
+    /// Obsidium: the skin of a nick (see PolytechSkins); `instance` is only checked for the mod.
+    ChangeSkinDialog(const QString& nick, BaseInstance* instance, QWidget* parent = nullptr);
 
    protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -44,6 +46,7 @@ class ChangeSkinDialog : public QDialog {
     void applySkin();
     void onSelectionChanged();
     void onModelToggled();
+    void updateButtons();
 
    private:
     struct SkinEntry {
@@ -57,10 +60,12 @@ class ChangeSkinDialog : public QDialog {
     QString libSkinsDir() const;  // <dataRoot>/polytechskins/skins
     QString libPngFor(const QString& id) const;
 
-    // Per-instance folder the mod reads from
-    QString instSkinDir() const;  // <gameRoot>/polytechskins
+    // The folder the active skin goes to: the instance's (what the mod reads) or the nick's
+    QString instSkinDir() const { return m_skinDir; }
+    void setup();
 
     void loadLibrary();
+    void ensureDefaultSkin();  // the built-in skin is always in the library
     void saveLibrary();
     void loadActive();  // active skin id for THIS instance
     void saveActive();
@@ -75,6 +80,8 @@ class ChangeSkinDialog : public QDialog {
     BaseInstance* m_instance;
     QString m_gameRoot;
     QString m_dataRoot;
+    QString m_skinDir;
+    QString m_nick;
     QVector<SkinEntry> m_skins;  // global library
     QString m_activeId;          // active id for THIS instance
     bool m_updating = false;

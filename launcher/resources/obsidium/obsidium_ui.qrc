@@ -3,6 +3,7 @@
     <qresource prefix="/obsidium">
         <file>frame.png</file>
         <file>frame_winter.png</file>
+        <file>default_skin.png</file>
         <file>minecraft.ttf</file>
     </qresource>
 </RCC>

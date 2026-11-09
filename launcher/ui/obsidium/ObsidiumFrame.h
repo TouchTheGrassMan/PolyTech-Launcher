@@ -124,6 +124,11 @@ class ObsidiumFrame : public QWidget {
     /// Width of the window relative to REFERENCE_WIDTH: the scale of captions and fonts.
     qreal scale() const { return m_scale; }
 
+    /// Darkens the picture while a dialog is open over it.
+    void setDimmed(bool dimmed);
+    /// Dims the picture by itself whenever a dialog of the launcher is open (except `mainWindow`).
+    void dimForDialogs(QWidget* mainWindow);
+
    signals:
     void scaleChanged(qreal scale);
 
@@ -142,6 +147,7 @@ class ObsidiumFrame : public QWidget {
 
     Obsidium::Theme m_theme;
     QImage m_picture;
+    QWidget* m_dim = nullptr;
     QList<Placed> m_placed;
     qreal m_scale = 1.0;
 };

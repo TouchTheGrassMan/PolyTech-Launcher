@@ -861,6 +861,10 @@ SET(LAUNCHER_SOURCES
     ui/MainWindow.cpp
     ui/MainWindowObsidium.cpp
     ui/obsidium/ObsidiumFrame.cpp
+    ui/obsidium/ObsidiumDialog.cpp
+    ui/obsidium/ObsidiumDialog.h
+    ui/obsidium/ProfileDialog.cpp
+    ui/obsidium/ProfileDialog.h
     ui/obsidium/ObsidiumFrame.h
     ui/InstanceWindow.h
     ui/InstanceWindow.cpp
@@ -919,6 +923,8 @@ SET(LAUNCHER_SOURCES
     LaunchMode.h
     LaunchController.h
     LaunchController.cpp
+    PolytechSkins.cpp
+    PolytechSkins.h
 
     # page provider for instances
     InstancePageProvider.h

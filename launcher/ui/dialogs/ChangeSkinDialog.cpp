@@ -1,7 +1,6 @@
 #include "ChangeSkinDialog.h"
 
 #include <QDateTime>
-#include <QDialogButtonBox>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -34,6 +33,8 @@
 #include "Application.h"
 #include "BaseInstance.h"
 #include "SkinPreview3D.h"
+#include "PolytechSkins.h"
+#include "ui/obsidium/ObsidiumFrame.h"
 
 // Front-of-head region in a 64x64 (or 64x32) skin, used for list thumbnails.
 static QIcon faceIcon(const QString& pngPath)
@@ -48,74 +49,121 @@ static QIcon faceIcon(const QString& pngPath)
     return QIcon(QPixmap::fromImage(img.scaled(32, 32, Qt::KeepAspectRatio, Qt::FastTransformation)));
 }
 
-ChangeSkinDialog::ChangeSkinDialog(BaseInstance* instance, QWidget* parent) : QDialog(parent), m_instance(instance)
+ChangeSkinDialog::ChangeSkinDialog(BaseInstance* instance, QWidget* parent) : ObsidiumDialog(parent), m_instance(instance)
 {
-    setWindowTitle(tr("Скины"));
-    setModal(true);
-    setAcceptDrops(true);
-    resize(580, 430);
+    if (m_instance) {
+        m_gameRoot = m_instance->gameRoot();
+        m_skinDir = PolytechSkins::instanceDir(m_gameRoot);
+    }
+    setup();
+}
 
+ChangeSkinDialog::ChangeSkinDialog(const QString& nick, BaseInstance* instance, QWidget* parent)
+    : ObsidiumDialog(parent), m_instance(instance), m_nick(nick)
+{
     if (m_instance)
         m_gameRoot = m_instance->gameRoot();
+    m_skinDir = PolytechSkins::accountDir(nick);
+    setup();
+}
+
+void ChangeSkinDialog::setup()
+{
+    using namespace ObsidiumStyle;
+    setTitle(m_nick.isEmpty() ? tr("Скины") : tr("Скин: %1").arg(m_nick));
+    setAcceptDrops(true);
+    setFixedSize(600, 420);
+
     m_dataRoot = APPLICATION->dataRoot();
 
-    auto* outer = new QVBoxLayout(this);
+    auto* outer = body();
 
     // Warning shown when the mod isn't installed in this instance.
     m_modWarning = new QLabel(this);
     m_modWarning->setWordWrap(true);
-    m_modWarning->setStyleSheet(QStringLiteral("QLabel { color: #d68a00; }"));
-    m_modWarning->setText(
-        tr("⚠ Мод polytechskins не установлен на этом экземпляре — скины не отобразятся, пока он не будет добавлен."));
+    m_modWarning->setStyleSheet(labelCss(WARNING, SMALL_PX));
+    m_modWarning->setText(tr("Мод polytechskins не установлен в выбранной сборке — там скины не отобразятся, пока его не добавить."));
     m_modWarning->setVisible(false);
     outer->addWidget(m_modWarning);
 
     auto* main = new QHBoxLayout();
+    main->setSpacing(14);
     outer->addLayout(main, 1);
 
     // ---- Left: the shared library list + its buttons ----
     auto* leftBox = new QVBoxLayout();
+    leftBox->setSpacing(7);
     m_list = new QListWidget(this);
-    m_list->setIconSize(QSize(32, 32));
+    m_list->setIconSize(QSize(20, 20));
+    m_list->setFocusPolicy(Qt::NoFocus);
+    m_list->setStyleSheet(listCss());
     leftBox->addWidget(m_list, 1);
 
+    auto* dropHint = new QLabel(tr("Файлы .png можно перетащить прямо в это окно."), this);
+    dropHint->setWordWrap(true);
+    dropHint->setStyleSheet(labelCss(MUTED, SMALL_PX));
+    leftBox->addWidget(dropHint);
+
     auto* listButtons = new QHBoxLayout();
-    auto* addBtn = new QPushButton(tr("Добавить…"), this);
+    listButtons->setSpacing(6);
+    auto* addBtn = new QPushButton(tr("Добавить"), this);
     m_renameBtn = new QPushButton(tr("Переименовать"), this);
     m_removeBtn = new QPushButton(tr("Удалить"), this);
-    listButtons->addWidget(addBtn);
-    listButtons->addWidget(m_renameBtn);
-    listButtons->addWidget(m_removeBtn);
+    for (auto* button : { addBtn, m_renameBtn, m_removeBtn }) {
+        // three in a row: narrower padding so that the captions fit
+        button->setStyleSheet(buttonCss() + QStringLiteral("QPushButton { padding: 5px 4px; }"));
+        button->setCursor(Qt::PointingHandCursor);
+        button->setAutoDefault(false);
+        listButtons->addWidget(button);
+    }
     leftBox->addLayout(listButtons);
     main->addLayout(leftBox, 1);
 
     // ---- Right: preview + model + apply ----
     auto* rightBox = new QVBoxLayout();
+    rightBox->setSpacing(7);
 
-    m_preview = new SkinPreview3D(this);
-    rightBox->addWidget(m_preview, 1);
+    auto* previewFrame = new QWidget(this);
+    previewFrame->setObjectName(QStringLiteral("previewFrame"));
+    previewFrame->setStyleSheet(panelCss(QStringLiteral("previewFrame")));
+    auto* previewLayout = new QVBoxLayout(previewFrame);
+    previewLayout->setContentsMargins(4, 4, 4, 4);
+    m_preview = new SkinPreview3D(previewFrame);
+    m_preview->setBackground(Qt::transparent);
+    previewLayout->addWidget(m_preview);
+    rightBox->addWidget(previewFrame, 1);
 
-    auto* modelGroup = new QGroupBox(tr("Модель"), this);
-    auto* modelRow = new QHBoxLayout(modelGroup);
-    m_classic = new QRadioButton(tr("Classic (Steve)"), modelGroup);
-    m_slim = new QRadioButton(tr("Slim (Alex)"), modelGroup);
+    auto* modelRow = new QHBoxLayout();
+    auto* modelLabel = new QLabel(tr("Модель:"), this);
+    modelLabel->setStyleSheet(labelCss(Obsidium::TEXT_COLOR, TEXT_PX));
+    modelRow->addWidget(modelLabel);
+    m_classic = new QRadioButton(tr("Обычная"), this);
+    m_slim = new QRadioButton(tr("Тонкая"), this);
+    m_classic->setToolTip(tr("Руки шириной 4 пикселя, как у Стива"));
+    m_slim->setToolTip(tr("Руки шириной 3 пикселя, как у Алекс"));
+    for (auto* radio : { m_classic, m_slim }) {
+        radio->setStyleSheet(radioCss());
+        radio->setCursor(Qt::PointingHandCursor);
+        modelRow->addWidget(radio);
+    }
+    modelRow->addStretch(1);
     m_classic->setChecked(true);
-    modelRow->addWidget(m_classic);
-    modelRow->addWidget(m_slim);
-    rightBox->addWidget(modelGroup);
+    rightBox->addLayout(modelRow);
 
-    m_applyBtn = new QPushButton(tr("Применить к этому экземпляру"), this);
+    m_applyBtn = new QPushButton(m_nick.isEmpty() ? tr("Применить к этой сборке") : tr("Выбрать для ника %1").arg(m_nick), this);
+    m_applyBtn->setStyleSheet(buttonCss());
+    m_applyBtn->setCursor(Qt::PointingHandCursor);
+    m_applyBtn->setAutoDefault(false);
     rightBox->addWidget(m_applyBtn);
 
-    m_hint = new QLabel(tr("Библиотека скинов общая для всего лаунчера. Активный (жирным) применён к этому экземпляру."), this);
+    m_hint = new QLabel(m_nick.isEmpty() ? tr("Библиотека скинов общая для всего лаунчера. Активный отмечен цветом.")
+                                         : tr("Библиотека скинов общая для всего лаунчера. Активный (отмечен цветом) будет у ника %1 "
+                                              "в любой сборке.")
+                                               .arg(m_nick),
+                        this);
     m_hint->setWordWrap(true);
+    m_hint->setStyleSheet(labelCss(MUTED, SMALL_PX));
     rightBox->addWidget(m_hint);
-
-    auto* closeBox = new QDialogButtonBox(QDialogButtonBox::Close, this);
-    if (auto* b = closeBox->button(QDialogButtonBox::Close))
-        b->setText(tr("Закрыть"));
-    connect(closeBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    rightBox->addWidget(closeBox);
 
     main->addLayout(rightBox, 1);
 
@@ -128,6 +176,7 @@ ChangeSkinDialog::ChangeSkinDialog(BaseInstance* instance, QWidget* parent) : QD
     connect(m_slim, &QRadioButton::toggled, this, &ChangeSkinDialog::onModelToggled);
 
     loadLibrary();
+    ensureDefaultSkin();
     loadActive();
     checkMod();
     refreshList();
@@ -148,11 +197,6 @@ QString ChangeSkinDialog::libSkinsDir() const
 QString ChangeSkinDialog::libPngFor(const QString& id) const
 {
     return QDir(libSkinsDir()).filePath(id + QStringLiteral(".png"));
-}
-
-QString ChangeSkinDialog::instSkinDir() const
-{
-    return QDir(m_gameRoot).filePath(QStringLiteral("polytechskins"));
 }
 
 int ChangeSkinDialog::currentIndex() const
@@ -190,6 +234,23 @@ void ChangeSkinDialog::loadLibrary()
     }
 }
 
+void ChangeSkinDialog::ensureDefaultSkin()
+{
+    const QString id = QString::fromLatin1(PolytechSkins::DEFAULT_SKIN_ID);
+    QDir().mkpath(libSkinsDir());
+    if (!QFile::exists(libPngFor(id))) {
+        QFile::copy(QString::fromLatin1(PolytechSkins::DEFAULT_SKIN_RESOURCE), libPngFor(id));
+        // a file copied out of the resources is read-only
+        QFile::setPermissions(libPngFor(id), QFile::ReadOwner | QFile::WriteOwner | QFile::ReadUser | QFile::WriteUser);
+    }
+    for (const SkinEntry& e : m_skins) {
+        if (e.id == id)
+            return;
+    }
+    m_skins.prepend({ id, tr("Стив"), QStringLiteral("classic") });
+    saveLibrary();
+}
+
 void ChangeSkinDialog::saveLibrary()
 {
     QDir().mkpath(libDir());
@@ -217,18 +278,24 @@ void ChangeSkinDialog::saveLibrary()
 void ChangeSkinDialog::loadActive()
 {
     m_activeId.clear();
-    if (m_gameRoot.isEmpty())
+    if (m_skinDir.isEmpty())
         return;
     QFile f(QDir(instSkinDir()).filePath(QStringLiteral("active.txt")));
     if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
         m_activeId = QString::fromUtf8(f.readAll()).trimmed();
         f.close();
     }
+    // nothing chosen (or a skin that was removed): the built-in one is what is used
+    bool known = false;
+    for (const SkinEntry& e : m_skins)
+        known = known || e.id == m_activeId;
+    if (!known)
+        m_activeId = QString::fromLatin1(PolytechSkins::DEFAULT_SKIN_ID);
 }
 
 void ChangeSkinDialog::saveActive()
 {
-    if (m_gameRoot.isEmpty())
+    if (m_skinDir.isEmpty())
         return;
     QDir().mkpath(instSkinDir());
     QFile f(QDir(instSkinDir()).filePath(QStringLiteral("active.txt")));
@@ -240,7 +307,7 @@ void ChangeSkinDialog::saveActive()
 
 void ChangeSkinDialog::materializeToInstance(const QString& id)
 {
-    if (m_gameRoot.isEmpty())
+    if (m_skinDir.isEmpty())
         return;
     int idx = -1;
     for (int i = 0; i < m_skins.size(); ++i)
@@ -290,9 +357,7 @@ void ChangeSkinDialog::refreshList()
     for (const SkinEntry& e : m_skins) {
         auto* item = new QListWidgetItem(faceIcon(libPngFor(e.id)), e.name);
         if (e.id == m_activeId) {
-            QFont f = item->font();
-            f.setBold(true);
-            item->setFont(f);
+            item->setForeground(Obsidium::ACCENT_COLOR);
             item->setText(e.name + tr("  (активный)"));
         }
         m_list->addItem(item);
@@ -317,8 +382,7 @@ void ChangeSkinDialog::refreshList()
     }
 
     bool has = !m_skins.isEmpty();
-    m_renameBtn->setEnabled(has);
-    m_removeBtn->setEnabled(has);
+    updateButtons();
     m_applyBtn->setEnabled(has);
     m_classic->setEnabled(has);
     m_slim->setEnabled(has);
@@ -346,6 +410,16 @@ void ChangeSkinDialog::updatePreview()
 void ChangeSkinDialog::onSelectionChanged()
 {
     updatePreview();
+    updateButtons();
+}
+
+void ChangeSkinDialog::updateButtons()
+{
+    // the built-in skin can be chosen but not renamed or removed
+    const int idx = currentIndex();
+    const bool own = idx >= 0 && m_skins[idx].id != QLatin1String(PolytechSkins::DEFAULT_SKIN_ID);
+    m_renameBtn->setEnabled(own);
+    m_removeBtn->setEnabled(own);
 }
 
 void ChangeSkinDialog::onModelToggled()
@@ -438,8 +512,10 @@ void ChangeSkinDialog::removeSkin()
     QFile::remove(libPngFor(id));
     m_skins.removeAt(idx);
     if (m_activeId == id) {
-        m_activeId.clear();
-        saveActive();  // this instance no longer points at a removed skin
+        // back to the built-in skin
+        m_activeId = QString::fromLatin1(PolytechSkins::DEFAULT_SKIN_ID);
+        saveActive();
+        materializeToInstance(m_activeId);
     }
     saveLibrary();
     refreshList();

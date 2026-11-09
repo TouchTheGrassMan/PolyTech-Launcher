@@ -39,13 +39,15 @@
 #include "Application.h"
 #include "HintOverrideProxyStyle.h"
 #include "rainbow.h"
+#include "ui/obsidium/ObsidiumDialog.h"
 
 void ITheme::apply(bool)
 {
     APPLICATION->setStyleSheet(QString());
     QApplication::setStyle(new HintOverrideProxyStyle(QStyleFactory::create(qtTheme())));
     QApplication::setPalette(colorScheme());
-    APPLICATION->setStyleSheet(appStyleSheet());
+    // Obsidium: tooltips and menus keep the launcher's look in every theme
+    APPLICATION->setStyleSheet(appStyleSheet() + ObsidiumStyle::popupCss());
     QDir::setSearchPaths("theme", searchPaths());
 }
 

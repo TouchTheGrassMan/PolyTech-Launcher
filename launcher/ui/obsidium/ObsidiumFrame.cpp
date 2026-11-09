@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "ObsidiumFrame.h"
 
+#include <QApplication>
 #include <QFontDatabase>
 #include <QFontMetricsF>
 #include <QGuiApplication>
@@ -8,17 +9,22 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QScreen>
+#include <QPointer>
+#include <QSet>
+#include <QVariantAnimation>
 #include <QWindow>
 
 namespace Obsidium {
 
 QFont pixelFont(qreal pixelSize)
 {
-    static const QString s_family = [] {
+    static QString s_family;
+    if (s_family.isEmpty()) {  // (tried again if the resources were not there yet)
         const int id = QFontDatabase::addApplicationFont(QStringLiteral(":/obsidium/minecraft.ttf"));
         const auto families = QFontDatabase::applicationFontFamilies(id);
-        return families.isEmpty() ? QString() : families.first();
-    }();
+        if (!families.isEmpty())
+            s_family = families.first();
+    }
     QFont font(s_family);
     font.setPixelSize(qMax(1, qRound(pixelSize)));
     font.setStyleStrategy(QFont::NoAntialias);  // a pixel font stays crisp
@@ -143,20 +149,15 @@ void ObsidiumButton::paintEvent(QPaintEvent*)
         QPainterPath path;
         path.addRoundedRect(r, radius, radius);
         QColor glow = m_style == Style::Bare ? QColor(255, 255, 255) : Obsidium::ACCENT_COLOR;
-        glow.setAlpha(down ? 70 : active ? 45 : 30);
+        glow.setAlpha(down ? 80 : active ? 60 : 30);
         p.fillPath(path, glow);
-        if (active) {
-            QPen pen(Obsidium::ACCENT_COLOR, qMax<qreal>(1.0, 2 * m_scale));
-            p.setPen(pen);
-            p.drawPath(path);
-        }
     }
 
     if (m_style == Style::Bare || text().isEmpty())
         return;
 
     // keep the caption off the gems at the ends of the painted button
-    const qreal inset = (m_style == Style::Play ? 30 : m_style == Style::Tab ? 15 : 22) * m_scale;
+    const qreal inset = (m_style == Style::Play ? 30 : m_style == Style::Tab ? 26 : 22) * m_scale;
     const QRectF textArea = r.adjusted(inset, 0, -inset, 0);
     QFont font = Obsidium::pixelFont(m_basePx * m_scale);
     // a long caption gets smaller rather than running over the gems
@@ -181,6 +182,188 @@ void ObsidiumButton::paintEvent(QPaintEvent*)
     p.drawText(textRect, Qt::AlignCenter, text());
 }
 
+// ---- dimming --------------------------------------------------------------------------------
+
+namespace {
+
+/// The picture's own shape in black, laid over it: only the picture gets darker, not the
+/// transparent corners around it.
+class DimOverlay : public QWidget {
+   public:
+    explicit DimOverlay(QWidget* parent) : QWidget(parent)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_TranslucentBackground);
+        m_fade = new QVariantAnimation(this);
+        m_fade->setDuration(160);
+        connect(m_fade, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
+            m_level = value.toReal();
+            setVisible(m_level > 0.001);
+            update();
+        });
+        hide();
+    }
+
+    void setShape(const QImage& picture)
+    {
+        m_shape = QImage(picture.size(), QImage::Format_ARGB32_Premultiplied);
+        m_shape.fill(Qt::transparent);
+        QPainter p(&m_shape);
+        p.drawImage(0, 0, picture);
+        p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        p.fillRect(m_shape.rect(), Qt::black);
+        p.end();
+        update();
+    }
+
+    void fadeTo(qreal level)
+    {
+        m_fade->stop();
+        m_fade->setStartValue(m_level);
+        m_fade->setEndValue(level);
+        if (level > 0)
+            raise();
+        m_fade->start();
+    }
+
+   protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        if (m_shape.isNull())
+            return;
+        QPainter p(this);
+        p.setOpacity(m_level);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        p.drawImage(rect(), m_shape);
+    }
+
+   private:
+    QImage m_shape;
+    qreal m_level = 0;
+    QVariantAnimation* m_fade;
+};
+
+/// Darkens a whole window (a dialog under another dialog).
+class WindowDim : public QWidget {
+   public:
+    explicit WindowDim(QWidget* window) : QWidget(window)
+    {
+        setObjectName(QStringLiteral("obsidiumWindowDim"));
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_TranslucentBackground);
+        // the launcher's own windows are rounded (see ObsidiumDialog::paintEvent)
+        m_rounded = window->inherits("ObsidiumDialog");
+        m_fade = new QVariantAnimation(this);
+        m_fade->setDuration(160);
+        connect(m_fade, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
+            m_level = value.toReal();
+            setVisible(m_level > 0.001);
+            update();
+        });
+        window->installEventFilter(this);
+        setGeometry(window->rect());
+        hide();
+    }
+
+    static WindowDim* of(QWidget* window)
+    {
+        // (findChild needs a Q_OBJECT class in Qt 6.10: looked up as a QWidget by its name)
+        if (auto* dim = window->findChild<QWidget*>(QStringLiteral("obsidiumWindowDim"), Qt::FindDirectChildrenOnly))
+            return static_cast<WindowDim*>(dim);
+        return new WindowDim(window);
+    }
+
+    void fadeTo(qreal level)
+    {
+        if (qFuzzyCompare(m_fade->endValue().toReal() + 1, level + 1) && m_fade->state() == QAbstractAnimation::Running)
+            return;
+        m_fade->stop();
+        m_fade->setStartValue(m_level);
+        m_fade->setEndValue(level);
+        if (level > 0) {
+            setGeometry(parentWidget()->rect());
+            raise();
+        }
+        m_fade->start();
+    }
+
+   protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == parentWidget() && event->type() == QEvent::Resize)
+            setGeometry(parentWidget()->rect());
+        return QWidget::eventFilter(watched, event);
+    }
+
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        QColor shade(0, 0, 0);
+        shade.setAlphaF(float(m_level));
+        if (m_rounded) {
+            QPainterPath path;
+            path.addRoundedRect(QRectF(rect()).adjusted(2, 2, -2, -2), 10, 10);
+            p.fillPath(path, shade);
+        } else {
+            p.fillRect(rect(), shade);
+        }
+    }
+
+   private:
+    bool m_rounded = false;
+    qreal m_level = 0;
+    QVariantAnimation* m_fade;
+};
+
+/// Watches the whole application for dialogs being shown and hidden: everything under the
+/// newest one gets darker - the main window and the dialogs opened before.
+class DialogWatcher : public QObject {
+   public:
+    DialogWatcher(ObsidiumFrame* frame, QWidget* mainWindow) : QObject(frame), m_frame(frame), m_main(mainWindow) {}
+
+   protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        const auto type = event->type();
+        if ((type != QEvent::Show && type != QEvent::Hide) || !watched->isWidgetType())
+            return false;
+        auto* widget = static_cast<QWidget*>(watched);
+        if (!widget->isWindow() || widget == m_main || (widget->windowType() != Qt::Dialog && widget->windowType() != Qt::Sheet))
+            return false;
+        if (type == QEvent::Show) {
+            if (!m_open.contains(widget)) {
+                m_open.append(widget);
+                connect(widget, &QObject::destroyed, this, [this, widget] {
+                    m_open.removeAll(widget);
+                    refresh();
+                });
+            }
+        } else {
+            m_open.removeAll(widget);
+            if (auto* dim = widget->findChild<QWidget*>(QStringLiteral("obsidiumWindowDim"), Qt::FindDirectChildrenOnly))
+                static_cast<WindowDim*>(dim)->fadeTo(0.0);
+        }
+        refresh();
+        return false;
+    }
+
+   private:
+    void refresh()
+    {
+        m_frame->setDimmed(!m_open.isEmpty());
+        // the newest window stays bright, the ones it covers get darker
+        for (int i = 0; i < m_open.size(); i++)
+            WindowDim::of(m_open[i])->fadeTo(i + 1 < m_open.size() ? 0.45 : 0.0);
+    }
+
+    ObsidiumFrame* m_frame;
+    QWidget* m_main;
+    QList<QWidget*> m_open;  // in the order they were opened
+};
+
+}  // namespace
+
 // ---- ObsidiumFrame ------------------------------------------------------------------------
 
 ObsidiumFrame::ObsidiumFrame(QWidget* parent) : QWidget(parent)
@@ -194,6 +377,8 @@ void ObsidiumFrame::setTheme(const Obsidium::Theme& newTheme)
 {
     m_theme = newTheme;
     m_picture = QImage(newTheme.picture);
+    if (m_dim)
+        static_cast<DimOverlay*>(m_dim)->setShape(m_picture);
     relayout();
     update();
 }
@@ -234,8 +419,26 @@ ObsidiumButton* ObsidiumFrame::addButton(const QString& text, ObsidiumButton::St
     return button;
 }
 
+void ObsidiumFrame::setDimmed(bool dimmed)
+{
+    if (!m_dim) {
+        auto* overlay = new DimOverlay(this);
+        overlay->setShape(m_picture);
+        overlay->setGeometry(rect());
+        m_dim = overlay;
+    }
+    static_cast<DimOverlay*>(m_dim)->fadeTo(dimmed ? 0.45 : 0.0);
+}
+
+void ObsidiumFrame::dimForDialogs(QWidget* mainWindow)
+{
+    qApp->installEventFilter(new DialogWatcher(this, mainWindow));
+}
+
 void ObsidiumFrame::relayout()
 {
+    if (m_dim)
+        m_dim->setGeometry(rect());
     // the rectangles are in the picture's coordinates
     const qreal k = m_theme.base.width() > 0 ? qreal(width()) / m_theme.base.width() : 1.0;
     for (const auto& placed : m_placed) {

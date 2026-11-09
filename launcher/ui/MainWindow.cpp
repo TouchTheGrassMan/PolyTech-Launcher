@@ -131,6 +131,7 @@
 
 #include "ui/dialogs/SkinPreview3D.h"
 #include "ui/obsidium/ObsidiumFrame.h"
+#include "ui/obsidium/ProfileDialog.h"
 
 #include "InstanceCopyTask.h"
 #include "InstanceDirUpdate.h"
@@ -1296,7 +1297,8 @@ void MainWindow::undoTrashInstance()
 
 void MainWindow::on_actionViewLauncherRootFolder_triggered()
 {
-    DesktopServices::openPath(".");
+    // the data folder itself, not the working directory (that differs for an installed launcher)
+    DesktopServices::openPath(APPLICATION->dataRoot());
 }
 
 void MainWindow::on_actionViewInstanceFolder_triggered()
@@ -1403,7 +1405,10 @@ void MainWindow::on_actionManageSkins_triggered()
 
 void MainWindow::on_actionManageAccounts_triggered()
 {
-    APPLICATION->ShowGlobalSettings(this, "accounts");
+    // Obsidium: the nicks have their own window, not a page of the settings
+    ProfileDialog dialog(m_selectedInstance, this);
+    dialog.exec();
+    updateObsidiumSkin();
 }
 
 void MainWindow::on_actionReportBug_triggered()
@@ -1643,8 +1648,15 @@ void MainWindow::on_actionChangeSkin_triggered()
     if (!m_selectedInstance)
         return;
 
-    ChangeSkinDialog dlg(m_selectedInstance, this);
-    dlg.exec();
+    // Obsidium: the skin belongs to the nick the game is started with
+    const auto account = APPLICATION->accounts()->defaultAccount();
+    if (account && !account->profileName().isEmpty()) {
+        ChangeSkinDialog dlg(account->profileName(), m_selectedInstance, this);
+        dlg.exec();
+    } else {
+        ChangeSkinDialog dlg(m_selectedInstance, this);
+        dlg.exec();
+    }
     updateObsidiumSkin();
 }
 

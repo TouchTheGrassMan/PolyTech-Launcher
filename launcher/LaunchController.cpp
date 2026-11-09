@@ -35,6 +35,8 @@
  */
 
 #include "LaunchController.h"
+#include "PolytechSkins.h"
+#include "ui/obsidium/ProfileDialog.h"
 
 #include <meta/BaseEntity.h>
 
@@ -104,7 +106,9 @@ void LaunchController::decideAccount()
 
         if (reply == QMessageBox::Yes) {
             // Open the account manager.
-            APPLICATION->ShowGlobalSettings(m_parentWidget, "accounts");
+            ProfileDialog dialog(m_instance, m_parentWidget);
+            dialog.exec();
+            m_accountToUse = accounts->defaultAccount();
         } else if (reply == QMessageBox::No) {
             // Do not open "profile select" dialog.
             return;
@@ -368,6 +372,10 @@ void LaunchController::launchInstance()
         emitFailed(tr("Couldn't load the instance profile."));
         return;
     }
+
+    // Obsidium: the skin chosen for the nick goes into the instance for the polytechskins mod
+    if (m_accountToUse)
+        PolytechSkins::applyToInstance(m_accountToUse->profileName(), m_instance->gameRoot());
 
     m_launcher = m_instance->createLaunchTask(m_session, m_targetToJoin);
     if (!m_launcher) {

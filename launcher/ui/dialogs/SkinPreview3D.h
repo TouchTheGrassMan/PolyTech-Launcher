@@ -5,6 +5,8 @@
 #include <QPoint>
 #include <QVector>
 #include <QVector3D>
+#include <QElapsedTimer>
+#include <QTimer>
 #include <QWidget>
 
 /**
@@ -46,6 +48,7 @@ class SkinPreview3D : public QWidget {
         QPoint baseUV;
         QPoint overlayUV;
         bool overlay;
+        int limb = 0;  // 1 right arm, 2 left arm: they sway while standing
     };
 
     void rebuildBoxes();
@@ -58,4 +61,8 @@ class SkinPreview3D : public QWidget {
     double m_yaw = -25.0;   // degrees, left-right
     double m_pitch = 12.0;  // degrees, up-down
     QPoint m_lastPos;
+
+    // the idle animation of the game: the arms sway as the player breathes
+    QTimer* m_timer = nullptr;
+    QElapsedTimer m_clock;
 };

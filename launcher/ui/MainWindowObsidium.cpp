@@ -10,7 +10,9 @@
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
 
+#include <QCursor>
 #include <QFile>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
@@ -24,6 +26,7 @@
 #include "Application.h"
 #include "BaseInstance.h"
 #include "FileSystem.h"
+#include "PolytechSkins.h"
 #include "minecraft/auth/AccountList.h"
 #include "news/NewsChecker.h"
 #include "ui/dialogs/SkinPreview3D.h"
@@ -56,6 +59,7 @@ void MainWindow::setupObsidiumWindow()
 
     m_obsidium = new ObsidiumFrame(this);
     m_obsidium->setTheme(Obsidium::theme(APPLICATION->settings()->get("ObsidiumTheme").toString()));
+    m_obsidium->dimForDialogs(this);
 
     // The picture is the window: no system frame, and its transparent edges stay transparent.
     setWindowFlag(Qt::FramelessWindowHint, true);
@@ -108,7 +112,7 @@ void MainWindow::setupObsidiumWindow()
     // ---- tabs
     const QString tabNames[3] = { tr("От разработчика"), tr("Пользовательские"), tr("Новости") };
     for (int i = 0; i < 3; i++) {
-        auto* tabButton = m_obsidium->addButton(tabNames[i], Style::Tab, TAB_SLOTS[i], 14);
+        auto* tabButton = m_obsidium->addButton(tabNames[i], Style::Tab, TAB_SLOTS[i], 12);
         connect(tabButton, &QAbstractButton::clicked, this, [this, i] { showObsidiumPage(i); });
         m_obsTabs.append(tabButton);
     }
@@ -216,6 +220,12 @@ void MainWindow::showEvent(QShowEvent* event)
     // Application restores the classic toolbars and geometry before showing the window.
     hideClassicChrome();
     resizeObsidiumWindow();
+    // always open in the middle of the screen the mouse is on
+    QScreen* target = QGuiApplication::screenAt(QCursor::pos());
+    if (!target)
+        target = screen();
+    if (target)
+        move(target->availableGeometry().center() - rect().center());
 }
 
 void MainWindow::resizeObsidiumWindow()
@@ -281,6 +291,7 @@ void MainWindow::updateObsidiumAccount()
     }
     const QString name = account->profileName();
     m_obsNick->setText(name.isEmpty() ? account->displayName() : name);
+    updateObsidiumSkin();
 }
 
 void MainWindow::updateObsidiumSkin()
@@ -293,18 +304,15 @@ void MainWindow::updateObsidiumSkin()
         return;
     }
     m_obsInstanceName->setText(m_selectedInstance->name());
-    // What polytechskins reads (see ChangeSkinDialog): <game>/polytechskins/skin.png and model.txt
-    const QString dir = FS::PathCombine(m_selectedInstance->gameRoot(), "polytechskins");
-    const QImage skin(FS::PathCombine(dir, "skin.png"));
-    if (skin.isNull()) {
-        m_obsSkin->clearSkin();
-        return;
-    }
+    // The nick's skin (its own or Steve; it goes into the instance when the game starts).
+    QImage skin;
     bool slim = false;
-    QFile model(FS::PathCombine(dir, "model.txt"));
-    if (model.open(QIODevice::ReadOnly))
-        slim = QString::fromUtf8(model.readAll()).trimmed().compare("slim", Qt::CaseInsensitive) == 0;
-    m_obsSkin->setSkin(skin, slim);
+    const auto account = APPLICATION->accounts()->defaultAccount();
+    if (account ? PolytechSkins::effective(account->profileName(), skin, slim)
+                : PolytechSkins::read(PolytechSkins::instanceDir(m_selectedInstance->gameRoot()), skin, slim))
+        m_obsSkin->setSkin(skin, slim);
+    else
+        m_obsSkin->clearSkin();
 }
 
 void MainWindow::updateObsidiumNews()

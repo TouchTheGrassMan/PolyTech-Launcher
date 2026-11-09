@@ -1,8 +1,10 @@
 #include "SkinPreview3D.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QMatrix4x4>
+#include <QtMath>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
@@ -14,7 +16,15 @@
 
 SkinPreview3D::SkinPreview3D(QWidget* parent) : QWidget(parent)
 {
-    setMinimumSize(180, 220);
+    setMinimumSize(120, 150);
+    m_clock.start();
+    m_timer = new QTimer(this);
+    m_timer->setInterval(40);
+    connect(m_timer, &QTimer::timeout, this, [this] {
+        if (isVisible() && !m_skin.isNull())
+            update();
+    });
+    m_timer->start();
 }
 
 QSize SkinPreview3D::sizeHint() const
@@ -53,10 +63,10 @@ void SkinPreview3D::rebuildBoxes()
     // Body
     m_boxes.push_back({ QVector3D(0, 18, 0), QVector3D(8, 12, 4), QPoint(16, 16), QPoint(16, 32), !legacy });
     // Right arm (player's right -> -X, i.e. viewer's left when facing the model)
-    m_boxes.push_back({ QVector3D(-armCX, 18, 0), QVector3D(armW, 12, 4), QPoint(40, 16), QPoint(40, 32), !legacy });
+    m_boxes.push_back({ QVector3D(-armCX, 18, 0), QVector3D(armW, 12, 4), QPoint(40, 16), QPoint(40, 32), !legacy, 1 });
     // Left arm (+X)
     m_boxes.push_back({ QVector3D(armCX, 18, 0), QVector3D(armW, 12, 4),
-                        legacy ? QPoint(40, 16) : QPoint(32, 48), QPoint(48, 48), !legacy });
+                        legacy ? QPoint(40, 16) : QPoint(32, 48), QPoint(48, 48), !legacy, 2 });
     // Right leg (-X)
     m_boxes.push_back({ QVector3D(-2, 6, 0), QVector3D(4, 12, 4), QPoint(0, 16), QPoint(0, 32), !legacy });
     // Left leg (+X)
@@ -96,7 +106,23 @@ void SkinPreview3D::paintEvent(QPaintEvent*)
 
     auto V = [](double x, double y, double z) { return QVector3D(float(x), float(y), float(z)); };
 
+    // Idle sway as in the game (ModelPart rotations of a standing player), a little stronger
+    // so that it shows on a small model. Time in game ticks (20 per second).
+    const double ticks = double(m_clock.elapsed()) / 50.0;
+    const double swayZ = (std::cos(ticks * 0.09) * 0.05 + 0.05) * 1.4;  // radians, outwards
+    const double swayX = std::sin(ticks * 0.067) * 0.05 * 1.4;          // radians, back and forth
+    auto armMatrix = [&](const Box& box, int side) {
+        const QVector3D shoulder(box.center.x(), 22.0f, 0.0f);
+        QMatrix4x4 m;
+        m.translate(shoulder);
+        m.rotate(float(qRadiansToDegrees(swayZ)) * float(side), 0, 0, 1);
+        m.rotate(float(qRadiansToDegrees(swayX)) * float(side), 1, 0, 0);
+        m.translate(-shoulder);
+        return m;
+    };
+
     for (const Box& b : m_boxes) {
+        const QMatrix4x4 local = b.limb == 1 ? armMatrix(b, -1) : b.limb == 2 ? armMatrix(b, 1) : QMatrix4x4();
         const int layers = b.overlay ? 2 : 1;
         for (int layer = 0; layer < layers; ++layer) {
             const double inflate = (layer == 1) ? 0.6 : 0.0;
@@ -139,7 +165,7 @@ void SkinPreview3D::paintEvent(QPaintEvent*)
                 QPolygonF dst;
                 double zsum = 0;
                 for (const QVector3D& corner : corners) {
-                    const QVector3D r = rot.map(corner - pivot);
+                    const QVector3D r = rot.map(local.map(corner) - pivot);
                     dst << QPointF(ox + r.x() * scale, oy - r.y() * scale);
                     zsum += r.z();
                 }
