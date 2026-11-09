@@ -69,7 +69,8 @@ void SkinPreview3D::paintEvent(QPaintEvent*)
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, false);
     p.setRenderHint(QPainter::SmoothPixmapTransform, false);
-    p.fillRect(rect(), QColor(32, 34, 40));
+    if (m_background.alpha() > 0)
+        p.fillRect(rect(), m_background);
 
     if (m_skin.isNull() || m_boxes.isEmpty()) {
         p.setPen(palette().color(QPalette::WindowText));

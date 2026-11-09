@@ -24,11 +24,20 @@ class InstanceProxyModel : public QSortFilterProxyModel {
    public:
     InstanceProxyModel(QObject* parent = 0);
 
+    /// Obsidium's main window shows the developer's packs and the player's own on different pages.
+    enum class Filter { All, Developer, User };
+    void setFilter(Filter filter);
+    Filter filter() const { return m_filter; }
+    /// The packs shipped by the developer (the bundled PolyTech instance).
+    static bool isDeveloperInstance(const QString& id);
+
    protected:
+    bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
     QVariant data(const QModelIndex& index, int role) const override;
     bool lessThan(const QModelIndex& left, const QModelIndex& right) const override;
     bool subSortLessThan(const QModelIndex& left, const QModelIndex& right) const;
 
    private:
     QCollator m_naturalSort;
+    Filter m_filter = Filter::All;
 };

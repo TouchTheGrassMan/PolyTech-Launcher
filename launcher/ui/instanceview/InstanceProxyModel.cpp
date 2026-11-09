@@ -18,6 +18,7 @@
 #include <BaseInstance.h>
 #include <icons/IconList.h>
 #include "Application.h"
+#include "InstanceList.h"
 #include "InstanceView.h"
 
 #include <QDebug>
@@ -28,6 +29,28 @@ InstanceProxyModel::InstanceProxyModel(QObject* parent) : QSortFilterProxyModel(
     m_naturalSort.setCaseSensitivity(Qt::CaseSensitivity::CaseInsensitive);
     // FIXME: use loaded translation as source of locale instead, hook this up to translation changes
     m_naturalSort.setLocale(QLocale::system());
+}
+
+bool InstanceProxyModel::isDeveloperInstance(const QString& id)
+{
+    return id == QLatin1String("PolyTech");
+}
+
+void InstanceProxyModel::setFilter(Filter filter)
+{
+    if (m_filter == filter)
+        return;
+    m_filter = filter;
+    invalidateFilter();
+}
+
+bool InstanceProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
+{
+    if (m_filter == Filter::All)
+        return true;
+    const auto index = sourceModel()->index(sourceRow, 0, sourceParent);
+    const bool developer = isDeveloperInstance(index.data(InstanceList::InstanceIDRole).toString());
+    return m_filter == Filter::Developer ? developer : !developer;
 }
 
 QVariant InstanceProxyModel::data(const QModelIndex& index, int role) const

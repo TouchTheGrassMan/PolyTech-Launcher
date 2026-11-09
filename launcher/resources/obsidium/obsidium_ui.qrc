@@ -1,0 +1,8 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/obsidium">
+        <file>frame.png</file>
+        <file>frame_winter.png</file>
+        <file>minecraft.ttf</file>
+    </qresource>
+</RCC>

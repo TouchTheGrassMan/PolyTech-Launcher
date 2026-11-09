@@ -1,53 +1,33 @@
-> [!CAUTION]
-> **There's now malicious links in the wild that disguise themselves as this project.**
->
-> Make sure that you download PineconeMC from `elyprismlauncher.github.io` and/or `pineconemc.ru`.
-
 <p align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="/program_info/ru.pineconemc.launcher.logo-darkmode.svg">
-  <source media="(prefers-color-scheme: light)" srcset="/program_info/ru.pineconemc.launcher.logo.svg">
-  <img alt="ru.pineconemc.launcher" src="/program_info/ru.pineconemc.launcher.logo.svg" width="40%">
-</picture>
+  <img alt="Obsidium" src="/program_info/obsidium.source.svg" width="160">
 </p>
 
+<h1 align="center">Obsidium</h1>
+
 <p align="center">
-  This <b>fork</b> of Prism Launcher adds integrated support for Ely.by accounts (MSA accounts can still be used)<br />
-  <br />This is <b>not</b> endorsed by Prism Launcher or Ely.by.
+  Лаунчер Minecraft для серверов и сборок QU4Dteam: готовая сборка PolyTech, скины, пресеты графики,
+  портативная и стационарная установка, а также Horizon — Minecraft: Java Edition, переписанная на Rust.
 </p>
 
-## Why this fork?
+Obsidium — <b>форк</b> PineconeMC (ранее ElyPrismLauncher), который, в свою очередь, является форком Prism Launcher.
+Obsidium не является ни Prism Launcher, ни PineconeMC и не одобрен их авторами, Ely.by, Mojang или Microsoft.
+Раньше проект назывался PolyTech Launcher.
 
-There are already quite a few forks out in the wild that add Ely.by support and/or disable the Microsoft account requirement. This fork goes beyond simply adding a login-password prompt and authlib-injector download.
+## Установка
 
-- Modern and secure login: PineconeMC uses OAuth2 to log you in. This means that your credentials are never transferred to the launcher. Instead, you log into your account on the official Ely.by page in the browser, and Ely.by gives the launcher a token to access your account with limited privileges.
-- Skins support on servers: All other forks rely exclusively on authlib-injector to patch Minecraft to support Ely.by. But authlib-injector can't provide skins on servers that don't have a special skins plugin installed. PineconeMC uses Ely.by's official Authlib patches, allowing you to see skins anywhere
+Все загрузки — на странице [Releases](https://github.com/TouchTheGrassMan/PolyTech-Launcher/releases/latest):
 
-## Installation
+- `Obsidium-Windows-MSVC-Setup-<версия>.exe` — установщик: при установке можно выбрать портативную или стационарную версию;
+- `Obsidium-Windows-MSVC-Portable-<версия>.zip` — портативная версия архивом.
 
-- All downloads and instructions for PineconeMC can be found on the [Releases](https://github.com/ElyPrismLauncher/Launcher/releases/latest) page.
-- Last build status can be found in the [GitHub Actions](https://github.com/ElyPrismLauncher/Launcher/actions) tab.
+## Сборка
 
-### Development Builds
+Сборка — как у Prism Launcher ([инструкция](https://prismlauncher.org/wiki/development/build-instructions)), имя программы — `Obsidium`:
 
-Please understand that these builds are not intended for most users. There may be bugs, and other instabilities. You have been warned.
-
-There are development builds available through:
-
-- [GitHub Actions](https://github.com/ElyPrismLauncher/Launcher/actions) (includes builds from pull requests opened by contributors)
-- [nightly.link](https://nightly.link/ElyPrismLauncher/Launcher/workflows/build/develop) (this will always point only to the latest version of develop)
-
-These have debug information in the binaries, so their file sizes are relatively larger.
-
-## Community & Support
-
-Feel free to create a GitHub issue if you find a bug or want to suggest a new feature. We have a Discord server where other community members can help you:
-
-[![Octol1ttle's Studio Discord server](https://discordapp.com/api/guilds/1201522867901313045/widget.png?style=banner3)](https://discord.gg/5kcBCvnbTp)
-
-## Building
-
-If you want to build PineconeMC yourself, check the [build instructions](https://prismlauncher.org/wiki/development/build-instructions).
+```
+cmake --preset windows_msvc -DLauncher_APP_BINARY_NAME="Obsidium"
+cmake --build --preset windows_msvc --config Debug
+```
 
 ## The following comes from the original Prism Launcher README
 

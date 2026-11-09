@@ -46,6 +46,8 @@ class CustomPage;
 }
 
 class NewInstanceDialog;
+class QTabWidget;
+class HorizonVersionsWidget;
 
 class CustomPage : public QWidget, public BasePage {
     Q_OBJECT
@@ -83,6 +85,9 @@ class CustomPage : public QWidget, public BasePage {
     bool initialized = false;
     NewInstanceDialog* dialog = nullptr;
     Ui::CustomPage* ui = nullptr;
+    // PolyTech: "Java Edition" and "Horizon" tabs
+    QTabWidget* m_tabs = nullptr;
+    HorizonVersionsWidget* m_horizon = nullptr;
     bool m_versionSetByUser = false;
     BaseVersion::Ptr m_selectedVersion;
     BaseVersion::Ptr m_selectedLoaderVersion;

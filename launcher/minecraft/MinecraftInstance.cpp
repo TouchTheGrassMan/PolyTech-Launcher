@@ -58,6 +58,10 @@
 #include "launch/steps/TextPrint.h"
 
 #include "minecraft/launch/ApplyGraphicsPreset.h"
+
+#include "horizon/Horizon.h"
+#include "horizon/HorizonLaunch.h"
+#include "horizon/HorizonSetup.h"
 #include "minecraft/launch/AutoInstallJava.h"
 #include "minecraft/launch/ClaimAccount.h"
 #include "minecraft/launch/CreateGameFolders.h"
@@ -278,6 +282,9 @@ void MinecraftInstance::loadSpecificSettings()
     // Join server on launch, this does not have a global override
     m_settings->registerSetting("OverrideModDownloadLoaders", false);
     m_settings->registerSetting("ModDownloadLoaders", "[]");
+
+    // PolyTech: instances that play Horizon (the Rust rewrite) instead of Java
+    Horizon::registerSettings(m_settings.get());
 
     qDebug() << "Instance-type specific settings were loaded!";
 
@@ -1125,7 +1132,10 @@ QString MinecraftInstance::getStatusbarDescription()
     }
 
     QString description;
-    description.append(tr("Minecraft %1").arg(mcVersion));
+    if (Horizon::isHorizon(this))
+        description.append(tr("Horizon (Minecraft %1)").arg(mcVersion));
+    else
+        description.append(tr("Minecraft %1").arg(mcVersion));
     if (m_settings->get("ShowGameTime").toBool()) {
         if (lastTimePlayed() > 0 && lastLaunch() > 0) {
             QDateTime lastLaunchTime = QDateTime::fromMSecsSinceEpoch(lastLaunch());
@@ -1221,7 +1231,7 @@ LaunchTask* MinecraftInstance::createLaunchTask(AuthSessionPtr session, Minecraf
     }
 
     // prepare Ely patch
-    if (session->wantsElyPatch) {
+    if (session->wantsElyPatch && !Horizon::isHorizon(this)) {
         process->appendStep(makeShared<TaskStepWrapper>(pptr, makeShared<ElyPatchTask>(this, runtimeContext(), mode)));
     }
 
@@ -1233,6 +1243,31 @@ LaunchTask* MinecraftInstance::createLaunchTask(AuthSessionPtr session, Minecraf
         }
     } else {
         process->appendStep(makeShared<EnsureOfflineLibraries>(pptr, this));
+    }
+
+    // PolyTech: Horizon plays the files downloaded above through its own programs, not Java.
+    if (Horizon::isHorizon(this)) {
+        auto info = std::make_shared<HorizonLaunchInfo>();
+        process->appendStep(makeShared<HorizonSetup>(pptr, info, session->launchMode != LaunchMode::Offline));
+        auto step = makeShared<HorizonLaunch>(pptr, info);
+        step->setWorkingDirectory(gameRoot());
+        step->setAuthSession(session);
+        step->setTargetToJoin(targetToJoin);
+        process->appendStep(step);
+        if (getPostExitCommand().size()) {
+            auto post = makeShared<PostLaunchCommand>(pptr);
+            post->setWorkingDirectory(gameRoot());
+            process->appendStep(post);
+        }
+        if (session) {
+            process->setCensorFilter(createCensorFilterFromSession(session));
+        }
+        if (m_settings->get("QuitAfterGameStop").toBool()) {
+            process->appendStep(makeShared<QuitAfterGameStop>(pptr));
+        }
+        m_launchProcess = std::move(process);
+        emit launchTaskChanged(m_launchProcess.get());
+        return m_launchProcess.get();
     }
 
     // if there are any jar mods

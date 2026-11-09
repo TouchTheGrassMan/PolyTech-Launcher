@@ -129,6 +129,9 @@
 
 #include "KonamiCode.h"
 
+#include "ui/dialogs/SkinPreview3D.h"
+#include "ui/obsidium/ObsidiumFrame.h"
+
 #include "InstanceCopyTask.h"
 #include "InstanceDirUpdate.h"
 
@@ -429,6 +432,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     view->setFocus();
 
     retranslateUi();
+
+    // Obsidium: the drawn window, unless the classic one is asked for (ClassicMainWindow=true in the launcher's .cfg).
+    if (!APPLICATION->settings()->get("ClassicMainWindow").toBool())
+        setupObsidiumWindow();
 }
 
 // macOS always has a native menu bar, so these fixes are not applicable
@@ -436,7 +443,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
 #ifndef Q_OS_MAC
 void MainWindow::keyReleaseEvent(QKeyEvent* event)
 {
-    if (event->key() == Qt::Key_Alt && !APPLICATION->settings()->get("MenuBarInsteadOfToolBar").toBool())
+    if (event->key() == Qt::Key_Alt && !m_obsidium && !APPLICATION->settings()->get("MenuBarInsteadOfToolBar").toBool())
         ui->menuBar->setVisible(!ui->menuBar->isVisible());
     else
         QMainWindow::keyReleaseEvent(event);
@@ -488,7 +495,7 @@ QMenu* MainWindow::createPopupMenu()
 }
 void MainWindow::setStatusBarVisibility(bool state)
 {
-    statusBar()->setVisible(state);
+    statusBar()->setVisible(state && !m_obsidium);
     APPLICATION->settings()->set("StatusBarVisible", state);
 }
 void MainWindow::lockToolbars(bool state)
@@ -589,6 +596,8 @@ void MainWindow::updateMainToolBar()
 {
     ui->menuBar->setVisible(APPLICATION->settings()->get("MenuBarInsteadOfToolBar").toBool());
     ui->mainToolBar->setVisible(ui->menuBar->isNativeMenuBar() || !APPLICATION->settings()->get("MenuBarInsteadOfToolBar").toBool());
+    if (m_obsidium)
+        hideClassicChrome();
 }
 
 void MainWindow::updateLaunchButton()
@@ -761,16 +770,23 @@ void MainWindow::defaultAccountChanged()
         } else {
             ui->actionAccountsButton->setIcon(face);
         }
+        updateObsidiumAccount();
         return;
     }
 
     // Set the icon to the "no account" icon.
     ui->actionAccountsButton->setIcon(QIcon::fromTheme("noaccount"));
     ui->actionAccountsButton->setText(tr("Accounts"));
+    updateObsidiumAccount();
 }
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* ev)
 {
+    // Obsidium: a double click on the skin opens the skin library
+    if (m_obsSkin && obj == m_obsSkin && ev->type() == QEvent::MouseButtonDblClick) {
+        on_actionChangeSkin_triggered();
+        return true;
+    }
     if (obj == view) {
         if (ev->type() == QEvent::KeyPress) {
             secretEventFilter->input(ev);
@@ -817,6 +833,7 @@ void MainWindow::updateNewsLabel()
             ui->actionMoreNews->setVisible(false);
         }
     }
+    updateObsidiumNews();
 }
 
 QList<int> stringToIntList(const QString& string)
@@ -1354,7 +1371,8 @@ void MainWindow::globalSettingsClosed()
     updateStatusCenter();
     // This needs to be done to prevent UI elements disappearing in the event the config is changed
     // but Prism Launcher exits abnormally, causing the window state to never be saved:
-    APPLICATION->settings()->set("MainWindowState", QString::fromUtf8(saveState().toBase64()));
+    if (!m_obsidium)
+        APPLICATION->settings()->set("MainWindowState", QString::fromUtf8(saveState().toBase64()));
     update();
 }
 
@@ -1561,8 +1579,9 @@ void MainWindow::on_actionViewSelectedInstFolder_triggered()
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    // Save the window state and geometry.
-    APPLICATION->settings()->set("MainWindowState", QString::fromUtf8(saveState().toBase64()));
+    // Save the window state and geometry. The Obsidium window hides the toolbars: keep the classic layout as it was.
+    if (!m_obsidium)
+        APPLICATION->settings()->set("MainWindowState", QString::fromUtf8(saveState().toBase64()));
     APPLICATION->settings()->set("MainWindowGeometry", QString::fromUtf8(saveGeometry().toBase64()));
     instanceToolbarSetting->set(QString::fromUtf8(ui->instanceToolBar->getVisibilityState().toBase64()));
     event->accept();
@@ -1626,6 +1645,7 @@ void MainWindow::on_actionChangeSkin_triggered()
 
     ChangeSkinDialog dlg(m_selectedInstance, this);
     dlg.exec();
+    updateObsidiumSkin();
 }
 
 void MainWindow::taskEnd()
@@ -1675,6 +1695,7 @@ void MainWindow::instanceChanged(const QModelIndex& current, [[maybe_unused]] co
 
         connect(m_selectedInstance, &BaseInstance::runningStatusChanged, this, &MainWindow::refreshCurrentInstance);
         connect(m_selectedInstance, &BaseInstance::profilerChanged, this, &MainWindow::refreshCurrentInstance);
+        updateObsidiumSkin();
     } else {
         APPLICATION->settings()->set("SelectedInstance", QString());
         selectionBad();
@@ -1684,6 +1705,9 @@ void MainWindow::instanceChanged(const QModelIndex& current, [[maybe_unused]] co
 
 void MainWindow::instanceSelectRequest(QString id)
 {
+    // Obsidium: a new (or copied) instance of the player's opens their page
+    if (m_obsidium && !InstanceProxyModel::isDeveloperInstance(id))
+        showObsidiumPage(1);
     setSelectedInstanceById(id);
 }
 
@@ -1708,6 +1732,7 @@ void MainWindow::selectionBad()
     updateLaunchButton();
     renameButton->setText(tr("Rename Instance"));
     updateInstanceToolIcon("grass");
+    updateObsidiumSkin();
 
     // ...and then see if we can enable the previously selected instance
     setSelectedInstanceById(APPLICATION->settings()->get("SelectedInstance").toString());

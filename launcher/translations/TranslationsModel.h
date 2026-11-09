@@ -49,6 +49,8 @@ class TranslationsModel : public QAbstractListModel {
     QList<Language>::Iterator findLanguage(const QString& key) const;
     std::optional<Language> findLanguageAsOptional(const QString& key) const;
     void reloadLocalFiles();
+    /// The original Prism download of the index (unused: the translations are built in).
+    void downloadIndexFromServer();
     void downloadTranslation(const QString& key);
     void downloadNext();
 

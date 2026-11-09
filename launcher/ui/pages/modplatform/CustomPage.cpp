@@ -37,6 +37,7 @@
 #include "ui_CustomPage.h"
 
 #include <QTabBar>
+#include <QTabWidget>
 
 #include "Application.h"
 #include "Filter.h"
@@ -46,9 +47,28 @@
 #include "minecraft/VanillaInstanceCreationTask.h"
 #include "ui/dialogs/NewInstanceDialog.h"
 
+#include "HorizonVersionsWidget.h"
+#include "horizon/HorizonCreationTask.h"
+
 CustomPage::CustomPage(NewInstanceDialog* dialog, QWidget* parent) : QWidget(parent), dialog(dialog), ui(new Ui::CustomPage)
 {
     ui->setupUi(this);
+
+    // PolyTech: the vanilla versions become the "Java Edition" tab, next to "Horizon".
+    m_tabs = new QTabWidget(this);
+    m_tabs->setDocumentMode(true);
+    ui->verticalLayout_5->removeWidget(ui->scrollArea);
+    m_tabs->addTab(ui->scrollArea, QStringLiteral("Java Edition"));
+    m_horizon = new HorizonVersionsWidget(m_tabs);
+    m_tabs->addTab(m_horizon, QStringLiteral("Horizon"));
+    ui->verticalLayout_5->insertWidget(0, m_tabs);
+    connect(m_tabs, &QTabWidget::currentChanged, this, [this] {
+        if (m_tabs->currentWidget() == m_horizon)
+            m_horizon->ensureLoaded();
+        suggestCurrent();
+    });
+    connect(m_horizon, &HorizonVersionsWidget::selectionChanged, this, &CustomPage::suggestCurrent);
+
     connect(ui->versionList, &VersionSelectWidget::selectedVersionChanged, this, &CustomPage::setSelectedVersion);
     filterChanged();
     connect(ui->alphaFilter, &QCheckBox::stateChanged, this, &CustomPage::filterChanged);
@@ -187,6 +207,18 @@ QString CustomPage::selectedLoader() const
 void CustomPage::suggestCurrent()
 {
     if (!isOpened) {
+        return;
+    }
+
+    if (m_tabs && m_tabs->currentWidget() == m_horizon) {
+        if (!m_horizon->hasSelection()) {
+            dialog->setSuggestedPack();
+            return;
+        }
+        const QString minecraft = m_horizon->selectedMinecraftVersion();
+        dialog->setSuggestedPack(QStringLiteral("Horizon %1").arg(minecraft),
+                                 new HorizonCreationTask(minecraft, m_horizon->selectedRelease(), m_horizon->autoUpdate()));
+        dialog->setSuggestedIcon("default");
         return;
     }
 

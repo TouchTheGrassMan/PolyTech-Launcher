@@ -58,6 +58,12 @@ class QLabel;
 class MinecraftLauncher;
 class BaseProfilerFactory;
 class InstanceView;
+class ObsidiumFrame;
+class ObsidiumButton;
+class QStackedWidget;
+class QTextBrowser;
+class QPushButton;
+class SkinPreview3D;
 class KonamiCode;
 class InstanceTask;
 class LabeledToolButton;
@@ -69,6 +75,16 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 
    public:
+    /// Obsidium: the old window's commands that the drawn one doesn't show yet, for the
+    /// "Старые настройки" page of the settings.
+    struct LegacyGroup {
+        QString title;
+        QList<QAction*> actions;
+    };
+    QList<LegacyGroup> legacyActionGroups();
+    /// Obsidium: shows the theme chosen in the settings ("ObsidiumTheme").
+    void applyObsidiumTheme();
+
     explicit MainWindow(QWidget* parent = 0);
     ~MainWindow();
 
@@ -214,8 +230,23 @@ class MainWindow : public QMainWindow {
 
     void refreshCurrentInstance();
 
+   protected:
+    void showEvent(QShowEvent* event) override;
+
    private:
     void retranslateUi();
+
+    // Obsidium: the drawn main window (ui/obsidium). The classic toolbars, menus and the
+    // status bar still exist and own the actions; they are only hidden.
+    void setupObsidiumWindow();
+    void hideClassicChrome();
+    void showObsidiumPage(int page);
+    void resizeObsidiumWindow();
+    void selectFirstVisibleInstance();
+    void updateObsidiumAccount();
+    void updateObsidiumSkin();
+    void updateObsidiumNews();
+    void updateObsidiumFonts(qreal scale);
 
     void addInstance(const QString& url = QString(), const QMap<QString, QString>& extra_info = {});
     void activateInstance(BaseInstance* instance);
@@ -249,4 +280,17 @@ class MainWindow : public QMainWindow {
 
     // managed by the application object
     Task* m_versionLoadTask = nullptr;
+
+    // Obsidium window (null when the classic window is used)
+    ObsidiumFrame* m_obsidium = nullptr;
+    QList<ObsidiumButton*> m_obsTabs;
+    QStackedWidget* m_obsPages = nullptr;
+    QLabel* m_obsInstanceName = nullptr;
+    QPushButton* m_obsActions = nullptr;
+    QTextBrowser* m_obsNews = nullptr;
+    QLabel* m_obsNick = nullptr;
+    SkinPreview3D* m_obsSkin = nullptr;
+    bool m_obsSized = false;
+    QAction* m_legacyRename = nullptr;
+    QAction* m_legacyIcon = nullptr;
 };

@@ -52,6 +52,9 @@
 #include "settings/SettingsObject.h"
 
 static constexpr QLatin1String g_defaultLangCode("en_US");
+// Obsidium: the translations are built into the launcher (resources/translations, refreshed by
+// tools/update_translations.py) instead of being downloaded from the Prism translation server.
+static constexpr QLatin1String g_bundledDir(":/translations");
 
 namespace {
 enum class FileType : std::uint8_t { None, Qm, Po };
@@ -175,17 +178,14 @@ struct TranslationsModel::Private {
     bool m_noLanguageSet = false;
 };
 
-TranslationsModel::TranslationsModel(const QString& path, QObject* parent) : QAbstractListModel(parent)
+TranslationsModel::TranslationsModel([[maybe_unused]] const QString& path, QObject* parent) : QAbstractListModel(parent)
 {
     d = std::make_unique<Private>();
-    d->m_dir.setPath(path);
+    d->m_dir.setPath(g_bundledDir);
     d->m_selectedLanguage = APPLICATION->settings()->get("Language").toString();
-    FS::ensureFolderPathExists(path);
+    // Obsidium: nobody asks for the language on the first start - indexReceived() takes the system one.
+    d->m_noLanguageSet = d->m_selectedLanguage.isEmpty();
     reloadLocalFiles();
-
-    d->watcher = new QFileSystemWatcher(this);
-    connect(d->watcher, &QFileSystemWatcher::directoryChanged, this, &TranslationsModel::translationDirChanged);
-    d->watcher->addPath(d->m_dir.canonicalPath());
 }
 
 TranslationsModel::~TranslationsModel() = default;
@@ -213,10 +213,9 @@ void TranslationsModel::indexReceived()
         selectLanguage(language);
         APPLICATION->settings()->set("Language", selectedLanguage());
         d->m_noLanguageSet = false;
-    }
-
-    if (selectedLanguage() != g_defaultLangCode) {
-        updateLanguage(selectedLanguage());
+    } else {
+        // built in: nothing to wait for, the saved language is switched on right away
+        selectLanguage(selectedLanguage());
     }
 }
 
@@ -268,7 +267,7 @@ void TranslationsModel::reloadLocalFiles()
 
     const auto indexPath = d->m_dir.absoluteFilePath("index_v2.json");
     if (!QFileInfo::exists(indexPath)) {
-        downloadIndex();
+        qCritical() << "The built-in translations are missing:" << indexPath;
         return;
     }
     readIndex(indexPath, languages);
@@ -550,6 +549,12 @@ QString TranslationsModel::selectedLanguage() const
 
 void TranslationsModel::downloadIndex()
 {
+    // Obsidium: the index is built in - "receiving" it only applies the language.
+    indexReceived();
+}
+
+void TranslationsModel::downloadIndexFromServer()
+{
     if (d->m_indexJob || d->m_downloadJob) {
         return;
     }
@@ -568,6 +573,9 @@ void TranslationsModel::downloadIndex()
 
 void TranslationsModel::updateLanguage(const QString& key)
 {
+    // Obsidium: the built-in translations are always up to date with the launcher.
+    if (d->m_dir.path().startsWith(':'))
+        return;
     if (key == g_defaultLangCode) {
         qWarning() << "Cannot update builtin language" << key;
         return;

@@ -276,6 +276,17 @@ set(MINECRAFT_SOURCES
     minecraft/launch/EnsureAvailableMemory.h
     minecraft/launch/ApplyGraphicsPreset.cpp
     minecraft/launch/ApplyGraphicsPreset.h
+
+    # PolyTech: Horizon, Minecraft: Java Edition rewritten in Rust
+    horizon/Horizon.cpp
+    horizon/Horizon.h
+    horizon/HorizonSetup.cpp
+    horizon/HorizonSetup.h
+    horizon/HorizonLaunch.cpp
+    horizon/HorizonLaunch.h
+    horizon/HorizonCreationTask.cpp
+    horizon/HorizonCreationTask.h
+
     minecraft/launch/EnsureOfflineLibraries.cpp
     minecraft/launch/EnsureOfflineLibraries.h
     minecraft/launch/ModMinecraftJar.cpp
@@ -848,6 +859,9 @@ SET(LAUNCHER_SOURCES
     ui/GuiUtil.cpp
     ui/MainWindow.h
     ui/MainWindow.cpp
+    ui/MainWindowObsidium.cpp
+    ui/obsidium/ObsidiumFrame.cpp
+    ui/obsidium/ObsidiumFrame.h
     ui/InstanceWindow.h
     ui/InstanceWindow.cpp
     ui/ViewLogWindow.h
@@ -970,12 +984,16 @@ SET(LAUNCHER_SOURCES
     ui/pages/global/AppearancePage.h
     ui/pages/global/ProxyPage.cpp
     ui/pages/global/ProxyPage.h
+    ui/pages/global/LegacyPage.cpp
+    ui/pages/global/LegacyPage.h
     ui/pages/global/APIPage.cpp
     ui/pages/global/APIPage.h
 
     # GUI - platform pages
     ui/pages/modplatform/CustomPage.cpp
     ui/pages/modplatform/CustomPage.h
+    ui/pages/modplatform/HorizonVersionsWidget.cpp
+    ui/pages/modplatform/HorizonVersionsWidget.h
 
     ui/pages/modplatform/ResourcePage.cpp
     ui/pages/modplatform/ResourcePage.h
@@ -1246,6 +1264,8 @@ qt_add_resources(LAUNCHER_RESOURCES
     resources/documents/documents.qrc
     resources/shaders/shaders.qrc
     resources/default_instance/default_instance.qrc
+    resources/obsidium/obsidium_ui.qrc
+    resources/translations/translations.qrc
     "${CMAKE_CURRENT_BINARY_DIR}/../${Launcher_Branding_LogoQRC}"
 )
 

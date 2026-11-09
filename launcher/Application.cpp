@@ -68,14 +68,13 @@
 #include "PolyTechRestart.h"
 #include "ui/pages/global/MinecraftPage.h"
 #include "ui/pages/global/ProxyPage.h"
+#include "ui/pages/global/LegacyPage.h"
 
 #include "ui/setupwizard/AutoJavaWizardPage.h"
 #include "ui/setupwizard/JavaWizardPage.h"
-#include "ui/setupwizard/LanguageWizardPage.h"
 #include "ui/setupwizard/LoginWizardPage.h"
 #include "ui/setupwizard/PasteWizardPage.h"
 #include "ui/setupwizard/SetupWizard.h"
-#include "ui/setupwizard/ThemeWizardPage.h"
 
 #include "ui/dialogs/CustomMessageBox.h"
 
@@ -824,6 +823,11 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         // Window state and geometry
         m_settings->registerSetting("MainWindowState", "");
         m_settings->registerSetting("MainWindowGeometry", "");
+        // Obsidium: true brings back the classic main window instead of the drawn one
+        m_settings->registerSetting("ClassicMainWindow", false);
+        // Obsidium: the window's size against its picture (1.0 = 1570x1002)
+        m_settings->registerSetting("ObsidiumScale", 0.75);
+        m_settings->registerSetting("ObsidiumTheme", QString());
 
         m_settings->registerSetting("ConsoleWindowState", "");
         m_settings->registerSetting("ConsoleWindowGeometry", "");
@@ -932,6 +936,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
             m_globalSettingsProvider->addPage<APIPage>();
             m_globalSettingsProvider->addPage<ExternalToolsPage>();
             m_globalSettingsProvider->addPage<ProxyPage>();
+            m_globalSettingsProvider->addPage<LegacyPage>();
         }
 
         PixmapCache::setInstance(new PixmapCache(this));
@@ -1324,15 +1329,15 @@ bool Application::createSetupWizard()
     }();
     bool askjava = BuildConfig.JAVA_DOWNLOADER_ENABLED && !javaRequired && !settings()->get("AutomaticJavaDownload").toBool() &&
                    !settings()->get("AutomaticJavaSwitch").toBool() && !settings()->get("UserAskedAboutAutomaticJavaDownload").toBool();
-    bool languageRequired = settings()->get("Language").toString().isEmpty();
+    // Obsidium: the language is not asked - TranslationsModel picks the system one by itself
+    // as soon as the translations index arrives (see TranslationsModel::indexReceived()).
     bool pasteInterventionRequired = settings()->get("PastebinURL") != "";
-    bool validWidgets = m_themeManager->isValidApplicationTheme(settings()->get("ApplicationTheme").toString());
-    bool validIcons = m_themeManager->isValidIconTheme(settings()->get("IconTheme").toString());
     bool login = !m_accounts->anyAccountIsValid() && capabilities() & Application::SupportsMSA;
-    bool themeInterventionRequired = !validWidgets || !validIcons;
-    bool wizardRequired = javaRequired || languageRequired || pasteInterventionRequired || themeInterventionRequired || askjava || login;
-    if (wizardRequired) {
-        // set default theme after going into theme wizard
+
+    // Obsidium: the theme is not asked either - the defaults are set right away.
+    {
+        bool validWidgets = m_themeManager->isValidApplicationTheme(settings()->get("ApplicationTheme").toString());
+        bool validIcons = m_themeManager->isValidIconTheme(settings()->get("IconTheme").toString());
         if (!validIcons)
             settings()->set("IconTheme", QString("pe_colored"));
         if (!validWidgets) {
@@ -1342,17 +1347,15 @@ bool Application::createSetupWizard()
 #else
             const QString style = QStringLiteral("system");
 #endif
-
             settings()->set("ApplicationTheme", style);
         }
+        if (!validWidgets || !validIcons)
+            m_themeManager->applyCurrentlySelectedTheme(true);
+    }
 
-        m_themeManager->applyCurrentlySelectedTheme(true);
-
+    bool wizardRequired = javaRequired || pasteInterventionRequired || askjava || login;
+    if (wizardRequired) {
         m_setupWizard = new SetupWizard(nullptr);
-        if (languageRequired) {
-            m_setupWizard->addPage(new LanguageWizardPage(m_setupWizard));
-        }
-
         if (javaRequired) {
             m_setupWizard->addPage(new JavaWizardPage(m_setupWizard));
         } else if (askjava) {
@@ -1361,10 +1364,6 @@ bool Application::createSetupWizard()
 
         if (pasteInterventionRequired) {
             m_setupWizard->addPage(new PasteWizardPage(m_setupWizard));
-        }
-
-        if (themeInterventionRequired) {
-            m_setupWizard->addPage(new ThemeWizardPage(m_setupWizard));
         }
 
         if (login) {

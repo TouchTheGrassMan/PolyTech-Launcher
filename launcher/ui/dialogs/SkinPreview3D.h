@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QColor>
 #include <QImage>
 #include <QPoint>
 #include <QVector>
@@ -24,6 +25,12 @@ class SkinPreview3D : public QWidget {
 
     void setSkin(const QImage& skin, bool slim);
     void clearSkin();
+    /// The colour behind the model; a transparent one lets the parent show through.
+    void setBackground(const QColor& color)
+    {
+        m_background = color;
+        update();
+    }
 
     QSize sizeHint() const override;
 
@@ -43,6 +50,7 @@ class SkinPreview3D : public QWidget {
 
     void rebuildBoxes();
 
+    QColor m_background = QColor(32, 34, 40);
     QImage m_skin;
     bool m_slim = false;
     QVector<Box> m_boxes;

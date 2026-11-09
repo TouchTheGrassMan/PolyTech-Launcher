@@ -1,5 +1,5 @@
 name: Package for Windows
-description: Create a Windows package for PineconeMC
+description: Create a Windows package for Obsidium
 
 inputs:
   version:
@@ -159,7 +159,7 @@ runs:
         certificate-profile-name: PineconeMC
 
         files: |
-          ${{ github.workspace }}\PolyTech-Launcher-Setup.exe
+          ${{ github.workspace }}\Obsidium-Setup.exe
 
         # recommended in https://github.com/Azure/artifact-signing-action#timestamping-1
         timestamp-rfc3161: 'http://timestamp.acs.microsoft.com'
@@ -180,17 +180,17 @@ runs:
     - name: Upload binary zip
       uses: actions/upload-artifact@v7
       with:
-        name: PolyTech-Launcher-${{ inputs.artifact-name }}-${{ inputs.version }}-${{ inputs.build-type }}
+        name: Obsidium-${{ inputs.artifact-name }}-${{ inputs.version }}-${{ inputs.build-type }}
         path: install/**
 
     - name: Upload portable zip
       uses: actions/upload-artifact@v7
       with:
-        name: PolyTech-Launcher-${{ inputs.artifact-name }}-Portable-${{ inputs.version }}-${{ inputs.build-type }}
+        name: Obsidium-${{ inputs.artifact-name }}-Portable-${{ inputs.version }}-${{ inputs.build-type }}
         path: install-portable/**
 
     - name: Upload installer
       uses: actions/upload-artifact@v7
       with:
-        name: PolyTech-Launcher-${{ inputs.artifact-name }}-Setup-${{ inputs.version }}-${{ inputs.build-type }}
-        path: PolyTech-Launcher-Setup.exe
+        name: Obsidium-${{ inputs.artifact-name }}-Setup-${{ inputs.version }}-${{ inputs.build-type }}
+        path: Obsidium-Setup.exe
