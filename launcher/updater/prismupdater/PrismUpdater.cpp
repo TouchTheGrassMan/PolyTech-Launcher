@@ -937,7 +937,7 @@ void PrismUpdaterApp::unpackAndInstall(QFileInfo archive)
         const QString exe = QDir::toNativeSeparators(FS::PathCombine(m_rootPath, launcherExe));
         const QString batPath = FS::PathCombine(m_dataPath, "prism_launcher_update.bat");
 
-        const QString logFile = QDir::toNativeSeparators(m_updateLogPath);
+        const QString updateLog = QDir::toNativeSeparators(m_updateLogPath);
         const QString lockFile = QDir::toNativeSeparators(FS::PathCombine(m_dataPath, ".prism_launcher_update.lock"));
         const QString successFile = QDir::toNativeSeparators(FS::PathCombine(m_dataPath, ".prism_launcher_update.success"));
         const QString failFile = QDir::toNativeSeparators(FS::PathCombine(m_dataPath, ".prism_launcher_update.fail"));
@@ -959,13 +959,13 @@ void PrismUpdaterApp::unpackAndInstall(QFileInfo archive)
         bat += QStringLiteral("robocopy \"%1\" \"%2\" /E /R:20 /W:1 >nul\r\n").arg(src, dst);
         // robocopy: 0-7 = success (files copied / nothing to copy), 8+ = errors.
         bat += QStringLiteral("set RC=%ERRORLEVEL%\r\n");
-        bat += QStringLiteral("echo Batch updater: robocopy exit code %RC% >>\"%1\"\r\n").arg(logFile);
+        bat += QStringLiteral("echo Batch updater: robocopy exit code %RC% >>\"%1\"\r\n").arg(updateLog);
         bat += QStringLiteral("if %RC% GEQ 8 (\r\n");
-        bat += QStringLiteral("  echo There were errors installing the update.>>\"%1\"\r\n").arg(logFile);
-        bat += QStringLiteral("  copy /y \"%1\" \"%2\" >nul\r\n").arg(logFile, failFile);
+        bat += QStringLiteral("  echo There were errors installing the update.>>\"%1\"\r\n").arg(updateLog);
+        bat += QStringLiteral("  copy /y \"%1\" \"%2\" >nul\r\n").arg(updateLog, failFile);
         bat += QStringLiteral(") else (\r\n");
-        bat += QStringLiteral("  echo Update succeed.>>\"%1\"\r\n").arg(logFile);
-        bat += QStringLiteral("  copy /y \"%1\" \"%2\" >nul\r\n").arg(logFile, successFile);
+        bat += QStringLiteral("  echo Update succeed.>>\"%1\"\r\n").arg(updateLog);
+        bat += QStringLiteral("  copy /y \"%1\" \"%2\" >nul\r\n").arg(updateLog, successFile);
         // Keep the unpacked release on failure: it is the way to recover by hand.
         bat += QStringLiteral("  rmdir /s /q \"%1\" >nul 2>&1\r\n").arg(src);
         bat += QStringLiteral(")\r\n");
