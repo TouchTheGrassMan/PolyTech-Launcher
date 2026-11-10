@@ -691,6 +691,11 @@ set(PRISMUPDATER_SOURCES
     ui/widgets/SubTaskProgressBar.h
     ui/widgets/SubTaskProgressBar.cpp
 
+    # Obsidium: the progress window is drawn in the launcher's look
+    ui/obsidium/ObsidiumDialog.cpp
+    ui/obsidium/ObsidiumDialog.h
+    ui/obsidium/ObsidiumFrame.cpp
+    ui/obsidium/ObsidiumFrame.h
 )
 
 if(WIN32)
