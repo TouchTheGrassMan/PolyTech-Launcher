@@ -76,6 +76,8 @@ LegacyPage::LegacyPage(QWidget* parent) : QWidget(parent)
     m_theme = new QComboBox(windowBox);
     const QString current = Obsidium::theme(APPLICATION->settings()->get("ObsidiumTheme").toString()).id;
     for (const auto& theme : Obsidium::themes()) {
+        if (!theme.available)
+            continue;
         m_theme->addItem(theme.name, theme.id);
         if (theme.id == current)
             m_theme->setCurrentIndex(m_theme->count() - 1);

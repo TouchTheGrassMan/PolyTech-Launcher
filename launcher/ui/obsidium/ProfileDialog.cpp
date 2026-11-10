@@ -336,10 +336,7 @@ void ProfileDialog::removeAccount(const QString& internalId)
         return;
     const auto account = m_accounts->at(row);
     const QString name = account->profileName().isEmpty() ? account->displayName() : account->profileName();
-    const auto answer = CustomMessageBox::selectable(this, tr("Удалить ник?"), tr("Удалить ник %1 из лаунчера?").arg(name),
-                                                     QMessageBox::Question, QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
-                            ->exec();
-    if (answer != QMessageBox::Yes)
+    if (!ObsidiumDialog::confirm(this, tr("Удалить ник?"), tr("Удалить ник %1 из лаунчера?").arg(name), tr("Удалить"), tr("Оставить")))
         return;
     const int current = rowOf(internalId);  // the list may have changed while asking
     if (current >= 0)

@@ -865,12 +865,10 @@ void MainWindow::runModalTask(Task* task)
             CustomMessageBox::selectable(this, tr("Warnings"), warnings.join('\n'), QMessageBox::Warning)->show();
         }
     });
-    connect(task, &Task::aborted, [this] {
-        CustomMessageBox::selectable(this, tr("Task aborted"), tr("The task has been aborted by the user."), QMessageBox::Information)
-            ->show();
-    });
+    // (no message after a cancel: the player has just confirmed it)
     ProgressDialog loadDialog(this);
     loadDialog.setSkipButton(true, tr("Abort"));
+    loadDialog.setCancelQuestion(tr("Вы действительно хотите прервать загрузку? В этом случае экземпляр игры добавлен не будет."));
     loadDialog.execWithTask(task);
 }
 
@@ -1708,6 +1706,7 @@ void MainWindow::instanceChanged(const QModelIndex& current, [[maybe_unused]] co
         connect(m_selectedInstance, &BaseInstance::runningStatusChanged, this, &MainWindow::refreshCurrentInstance);
         connect(m_selectedInstance, &BaseInstance::profilerChanged, this, &MainWindow::refreshCurrentInstance);
         updateObsidiumSkin();
+        updateObsidiumAccount();  // "Играть" / "Остановить"
     } else {
         APPLICATION->settings()->set("SelectedInstance", QString());
         selectionBad();

@@ -19,6 +19,8 @@
 #include <QRect>
 #include <QWidget>
 
+class QVariantAnimation;
+
 namespace Obsidium {
 
 /// Window width at scale 1.0; caption sizes are given for it.
@@ -50,6 +52,7 @@ struct Theme {
     QString name;
     QString picture;
     QSize base;  // the size the rectangles were measured on
+    bool available = true;  // offered in the settings (a seasonal one is switched off out of season)
     QRect rects[int(Slot::Count)];
 
     QRect rect(Slot slot) const { return rects[int(slot)]; }
@@ -57,7 +60,7 @@ struct Theme {
 
 /// All themes; the first one is the default.
 const QList<Theme>& themes();
-/// The theme with this id, or the default one.
+/// The theme with this id, or the default one (also for a theme that is switched off).
 const Theme& theme(const QString& id);
 
 /// The font of the picture's captions ("Minecraft Rus"), loaded from the resources once.
@@ -85,6 +88,10 @@ class ObsidiumButton : public QAbstractButton {
     /// Caption size in the picture's pixels.
     void setBasePixelSize(qreal px) { m_basePx = px; }
     void setScale(qreal scale);
+    /// Pulses to draw the eye (e.g. "Настройки профиля" while there is no nick).
+    void setAttention(bool attention);
+    /// Red instead of purple ("Остановить" while the game runs).
+    void setDanger(bool danger);
 
     QSize sizeHint() const override { return { 100, 30 }; }
 
@@ -98,6 +105,9 @@ class ObsidiumButton : public QAbstractButton {
     qreal m_basePx = 22;
     qreal m_scale = 1.0;
     bool m_hover = false;
+    QVariantAnimation* m_pulse = nullptr;
+    qreal m_pulseLevel = 0;
+    bool m_danger = false;
 };
 
 /// The window's picture, with the widgets placed on it.

@@ -30,8 +30,11 @@
 #include "minecraft/auth/AccountList.h"
 #include "news/NewsChecker.h"
 #include "ui/dialogs/SkinPreview3D.h"
+#include "InstanceList.h"
 #include "ui/instanceview/InstanceProxyModel.h"
 #include "ui/instanceview/InstanceView.h"
+#include "ui/obsidium/DeveloperPage.h"
+#include "ui/obsidium/ObsidiumDialog.h"
 #include "ui/obsidium/ObsidiumFrame.h"
 
 namespace {
@@ -168,6 +171,14 @@ void MainWindow::setupObsidiumWindow()
     m_obsNews->setFrameShape(QFrame::NoFrame);
     m_obsNews->viewport()->setAutoFillBackground(false);
     m_obsPages->addWidget(m_obsNews);
+    // the developer's modpack: a picture and a few words, nothing to choose
+    m_obsDeveloper = new DeveloperPage();
+    m_obsDeveloper->setPreview(QImage(QStringLiteral(":/obsidium/polytech_preview.png")));
+    m_obsDeveloper->setTitle(QStringLiteral("PolyTech 1.20.1"));
+    m_obsDeveloper->setDescription(
+        tr("Технологическая PvP сборка для игры с друзьями: полноценный Create с аддонами, AE2, модифицированный TacZ, "
+           "новые локации, сложные данжи, боссы и невероятная графика!"));
+    m_obsPages->addWidget(m_obsDeveloper);
     m_obsidium->place(m_obsPages, Slot::Content);
 
     // ---- right column
@@ -183,12 +194,25 @@ void MainWindow::setupObsidiumWindow()
     m_obsidium->place(m_obsSkin, Slot::Skin);
 
     auto* profileButton = m_obsidium->addButton(tr("Настройки профиля"), Style::Plain, Slot::Profile, 19);
+    m_obsProfile = profileButton;
     connect(profileButton, &QAbstractButton::clicked, ui->actionManageAccounts, &QAction::trigger);
 
     auto* playButton = m_obsidium->addButton(tr("Играть"), Style::Play, Slot::Play, 40);
-    connect(playButton, &QAbstractButton::clicked, ui->actionLaunchInstance, &QAction::trigger);
-    connect(ui->actionLaunchInstance, &QAction::changed, playButton, [this, playButton] { playButton->setEnabled(ui->actionLaunchInstance->isEnabled()); });
-    playButton->setEnabled(ui->actionLaunchInstance->isEnabled());
+    connect(playButton, &QAbstractButton::clicked, this, [this] {
+        // "Играть" while the game is not running, "Остановить" while it is
+        if (m_selectedInstance && m_selectedInstance->isRunning()) {
+            if (ObsidiumDialog::confirm(this, tr("Остановить игру?"),
+                                        tr("Игра будет закрыта сразу, несохранённый прогресс может потеряться."), tr("Остановить"),
+                                        tr("Продолжить играть")))
+                ui->actionKillInstance->trigger();
+        } else {
+            ui->actionLaunchInstance->trigger();
+        }
+    });
+    m_obsPlay = playButton;
+    // nothing to play with until there is a nick (see updateObsidiumAccount)
+    connect(ui->actionLaunchInstance, &QAction::changed, this, &MainWindow::updateObsidiumAccount);
+    connect(APPLICATION->accounts(), &AccountList::listChanged, this, &MainWindow::updateObsidiumAccount);
 
     connect(m_obsidium, &ObsidiumFrame::scaleChanged, this, &MainWindow::updateObsidiumFonts);
 
@@ -196,7 +220,16 @@ void MainWindow::setupObsidiumWindow()
     resizeObsidiumWindow();
     updateObsidiumFonts(m_obsidium->scale());
 
-    showObsidiumPage(0);
+    // the instance played last time is chosen again, so that "Играть" is all it takes
+    const QString last = APPLICATION->settings()->get("LastLaunchedInstance").toString();
+    if (!last.isEmpty() && !InstanceProxyModel::isDeveloperInstance(last) && APPLICATION->instances()->getInstanceById(last)) {
+        showObsidiumPage(1);
+        // (the page may have chosen it already: selecting it twice would reload it twice)
+        if (!m_selectedInstance || m_selectedInstance->id() != last)
+            setSelectedInstanceById(last);
+    } else {
+        showObsidiumPage(0);
+    }
     updateObsidiumAccount();
     updateObsidiumSkin();
     updateObsidiumNews();
@@ -265,8 +298,17 @@ void MainWindow::showObsidiumPage(int page)
         updateObsidiumNews();
         return;
     }
+    if (page == 0) {
+        // the developer's modpack is chosen by itself: "Играть" starts it
+        m_obsPages->setCurrentWidget(m_obsDeveloper);
+        proxymodel->setFilter(InstanceProxyModel::Filter::Developer);
+        const auto first = proxymodel->index(0, 0);
+        if (first.isValid())
+            view->setCurrentIndex(first);
+        return;
+    }
     m_obsPages->setCurrentIndex(0);
-    proxymodel->setFilter(page == 0 ? InstanceProxyModel::Filter::Developer : InstanceProxyModel::Filter::User);
+    proxymodel->setFilter(InstanceProxyModel::Filter::User);
     selectFirstVisibleInstance();
 }
 
@@ -284,6 +326,16 @@ void MainWindow::updateObsidiumAccount()
 {
     if (!m_obsNick)
         return;
+    const bool noNicks = APPLICATION->accounts()->count() == 0;
+    const bool running = m_selectedInstance && m_selectedInstance->isRunning();
+    if (m_obsPlay) {
+        m_obsPlay->setText(running ? tr("Остановить") : tr("Играть"));
+        m_obsPlay->setDanger(running);
+        m_obsPlay->setEnabled(running || (!noNicks && ui->actionLaunchInstance->isEnabled()));
+        m_obsPlay->setToolTip(noNicks && !running ? tr("Сначала добавьте ник в настройках профиля") : QString());
+    }
+    if (m_obsProfile)
+        m_obsProfile->setAttention(noNicks);
     const auto account = APPLICATION->accounts()->defaultAccount();
     if (!account) {
         m_obsNick->setText(tr("Нет учётной записи"));
@@ -377,3 +429,4 @@ QList<MainWindow::LegacyGroup> MainWindow::legacyActionGroups()
     groups.append({ tr("Справка и новости"), help });
     return groups;
 }
+

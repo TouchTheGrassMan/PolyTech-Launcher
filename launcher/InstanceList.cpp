@@ -1040,6 +1040,10 @@ bool InstanceList::commitStagedInstance(const QString& path,
         instID = commiting.originalInstanceID();
     } else {
         instID = FS::DirNameFromString(instanceName.modifiedName(), m_instDir);
+        // Obsidium: "PolyTech" is the developer's modpack (see InstanceProxyModel); an instance of
+        // the player's with that name gets another folder and stays among the player's instances.
+        if (instID.compare(QLatin1String("PolyTech"), Qt::CaseInsensitive) == 0)
+            instID = FS::DirNameFromString(instanceName.modifiedName() + QStringLiteral("-user"), m_instDir);
     }
 
     Q_ASSERT(!instID.isEmpty());

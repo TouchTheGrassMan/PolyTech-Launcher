@@ -47,6 +47,13 @@ class ChangeSkinDialog : public ObsidiumDialog {
     void onSelectionChanged();
     void onModelToggled();
     void updateButtons();
+    void updateApplyText();
+
+   protected:
+    void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
+   private:
 
    private:
     struct SkinEntry {

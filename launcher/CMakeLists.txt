@@ -861,6 +861,8 @@ SET(LAUNCHER_SOURCES
     ui/MainWindow.cpp
     ui/MainWindowObsidium.cpp
     ui/obsidium/ObsidiumFrame.cpp
+    ui/obsidium/DeveloperPage.cpp
+    ui/obsidium/DeveloperPage.h
     ui/obsidium/ObsidiumDialog.cpp
     ui/obsidium/ObsidiumDialog.h
     ui/obsidium/ProfileDialog.cpp

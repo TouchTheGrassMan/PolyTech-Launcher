@@ -59,6 +59,7 @@ class MinecraftLauncher;
 class BaseProfilerFactory;
 class InstanceView;
 class ObsidiumFrame;
+class DeveloperPage;
 class ObsidiumButton;
 class QStackedWidget;
 class QTextBrowser;
@@ -291,6 +292,9 @@ class MainWindow : public QMainWindow {
     QLabel* m_obsNick = nullptr;
     SkinPreview3D* m_obsSkin = nullptr;
     bool m_obsSized = false;
+    ObsidiumButton* m_obsPlay = nullptr;
+    DeveloperPage* m_obsDeveloper = nullptr;
+    ObsidiumButton* m_obsProfile = nullptr;
     QAction* m_legacyRename = nullptr;
     QAction* m_legacyIcon = nullptr;
 };

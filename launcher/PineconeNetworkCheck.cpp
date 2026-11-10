@@ -107,12 +107,6 @@ void PineconeNetworkCheck::finished()
     };
     std::ignore = handleUrlOverride("LegacyFMLLibsURLOverride", fmlLibsUrls);
 
-    const QMap<Result, QString> newsUrls = {
-        { Result::UsePrimary, "" },
-        { Result::UseNewFallback, "https://pineconemc.github.io/feed/feed.xml" },
-        { Result::UseOldFallback, "https://elyprismlauncher.github.io/feed/feed.xml" },
-    };
-    if (newsUrls.contains(m_result)) {
-        emit shouldReloadNews(newsUrls.value(m_result));
-    }
+    // Obsidium: the news are our own (news.xml of the launcher's repository, see
+    // Launcher_NEWS_RSS_URL), so they are not switched to PineconeMC's mirrors here.
 }

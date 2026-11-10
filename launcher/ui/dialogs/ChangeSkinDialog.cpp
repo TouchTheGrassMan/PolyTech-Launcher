@@ -42,11 +42,14 @@ static QIcon faceIcon(const QString& pngPath)
     QImage img(pngPath);
     if (img.isNull())
         return QIcon();
-    if (img.width() >= 16 && img.height() >= 16) {
-        QImage face = img.copy(8, 8, 8, 8).scaled(32, 32, Qt::KeepAspectRatio, Qt::FastTransformation);
-        return QIcon(QPixmap::fromImage(face));
-    }
-    return QIcon(QPixmap::fromImage(img.scaled(32, 32, Qt::KeepAspectRatio, Qt::FastTransformation)));
+    QPixmap face = ObsidiumStyle::faceOf(img, 32);
+    if (face.isNull())
+        face = QPixmap::fromImage(img.scaled(32, 32, Qt::KeepAspectRatio, Qt::FastTransformation));
+    // the same picture when selected: the style must not tint the face with the highlight
+    QIcon icon;
+    for (auto mode : { QIcon::Normal, QIcon::Selected, QIcon::Active })
+        icon.addPixmap(face, mode);
+    return icon;
 }
 
 ChangeSkinDialog::ChangeSkinDialog(BaseInstance* instance, QWidget* parent) : ObsidiumDialog(parent), m_instance(instance)
@@ -72,7 +75,7 @@ void ChangeSkinDialog::setup()
     using namespace ObsidiumStyle;
     setTitle(m_nick.isEmpty() ? tr("Скины") : tr("Скин: %1").arg(m_nick));
     setAcceptDrops(true);
-    setFixedSize(600, 420);
+    setFixedSize(640, 430);
 
     m_dataRoot = APPLICATION->dataRoot();
 
@@ -114,6 +117,7 @@ void ChangeSkinDialog::setup()
         button->setStyleSheet(buttonCss() + QStringLiteral("QPushButton { padding: 5px 4px; }"));
         button->setCursor(Qt::PointingHandCursor);
         button->setAutoDefault(false);
+        button->setMinimumWidth(button->sizeHint().width());  // the caption is never cut
         listButtons->addWidget(button);
     }
     leftBox->addLayout(listButtons);
@@ -150,7 +154,8 @@ void ChangeSkinDialog::setup()
     m_classic->setChecked(true);
     rightBox->addLayout(modelRow);
 
-    m_applyBtn = new QPushButton(m_nick.isEmpty() ? tr("Применить к этой сборке") : tr("Выбрать для ника %1").arg(m_nick), this);
+    m_applyBtn = new QPushButton(this);
+    m_applyBtn->setMinimumWidth(1);  // a long nick is shortened instead (updateApplyText)
     m_applyBtn->setStyleSheet(buttonCss());
     m_applyBtn->setCursor(Qt::PointingHandCursor);
     m_applyBtn->setAutoDefault(false);
@@ -171,6 +176,8 @@ void ChangeSkinDialog::setup()
     connect(m_renameBtn, &QPushButton::clicked, this, &ChangeSkinDialog::renameSkin);
     connect(m_removeBtn, &QPushButton::clicked, this, &ChangeSkinDialog::removeSkin);
     connect(m_applyBtn, &QPushButton::clicked, this, &ChangeSkinDialog::applySkin);
+    // a double click on a skin chooses it, like the button
+    connect(m_list, &QListWidget::itemDoubleClicked, this, [this] { applySkin(); });
     connect(m_list, &QListWidget::currentRowChanged, this, &ChangeSkinDialog::onSelectionChanged);
     connect(m_classic, &QRadioButton::toggled, this, &ChangeSkinDialog::onModelToggled);
     connect(m_slim, &QRadioButton::toggled, this, &ChangeSkinDialog::onModelToggled);
@@ -560,4 +567,31 @@ void ChangeSkinDialog::dropEvent(QDropEvent* event)
     }
     if (added > 0)
         event->acceptProposedAction();
+}
+
+void ChangeSkinDialog::updateApplyText()
+{
+    if (m_nick.isEmpty()) {
+        m_applyBtn->setText(tr("Применить к этой сборке"));
+        return;
+    }
+    // only the nick is shortened, from the right: "Выбрать для ника VeryLongNi…"
+    m_applyBtn->ensurePolished();
+    const QFontMetrics metrics(m_applyBtn->font());
+    const QString prefix = tr("Выбрать для ника %1").arg(QString());
+    const int room = m_applyBtn->width() - 28 - metrics.horizontalAdvance(prefix);  // padding and frame of buttonCss()
+    m_applyBtn->setText(prefix + metrics.elidedText(m_nick, Qt::ElideRight, qMax(room, metrics.horizontalAdvance(QStringLiteral("…")))));
+    m_applyBtn->setToolTip(tr("Выбрать для ника %1").arg(m_nick));
+}
+
+void ChangeSkinDialog::showEvent(QShowEvent* event)
+{
+    ObsidiumDialog::showEvent(event);
+    updateApplyText();
+}
+
+void ChangeSkinDialog::resizeEvent(QResizeEvent* event)
+{
+    ObsidiumDialog::resizeEvent(event);
+    updateApplyText();
 }

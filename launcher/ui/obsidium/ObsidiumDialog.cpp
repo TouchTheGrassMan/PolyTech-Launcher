@@ -6,6 +6,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPushButton>
 #include <QVBoxLayout>
 #include <QWindow>
 
@@ -46,6 +47,17 @@ QPixmap faceOf(const QImage& skin, int size)
     return QPixmap::fromImage(face.scaled(size, size, Qt::IgnoreAspectRatio, Qt::FastTransformation));
 }
 
+
+QString accentButtonCss()
+{
+    return QStringLiteral(
+               "QPushButton { %1 color: #ffffff; border: 2px solid #e6a8ff; border-radius: 5px; padding: 7px 22px; "
+               "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #b45cf0, stop:1 #6a1fa8); }"
+               "QPushButton:hover { border-color: #ffffff; "
+               "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #c97bff, stop:1 #7d2bc2); }"
+               "QPushButton:pressed { background: #5a1890; }")
+        .arg(fontCss(14));
+}
 
 QString lineEditCss()
 {
@@ -90,6 +102,42 @@ QString hintCss()
 QString labelCss(const QColor& color, int px)
 {
     return QStringLiteral("QLabel { color: %1; %2 background: transparent; border: none; }").arg(rgb(color), fontCss(px));
+}
+
+QString progressCss()
+{
+    return QStringLiteral(
+               "QLabel { %1 color: %2; background: transparent; }"
+               "QProgressBar { %1 color: #ffffff; background: %3; border: 2px solid %4; border-radius: 5px; text-align: center; "
+               "min-height: 18px; }"
+               "QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #b45cf0, stop:1 #6a1fa8); "
+               "border-radius: 3px; margin: 1px; }"
+               "QScrollArea { background: transparent; border: none; }"
+               "QScrollArea > QWidget > QWidget { background: transparent; }"
+               "QScrollBar:vertical { background: %3; width: 10px; margin: 0; border: none; border-radius: 5px; }"
+               "QScrollBar::handle:vertical { background: %4; min-height: 24px; border-radius: 5px; }"
+               "QScrollBar::handle:vertical:hover { background: %5; }"
+               "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+               "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }")
+               .arg(fontCss(TEXT_PX), rgb(Obsidium::TEXT_COLOR), rgb(PANEL_BG), rgb(BRONZE), rgb(Obsidium::ACCENT_COLOR)) +
+           buttonCss();
+}
+
+void paintWindowFrame(QPainter& p, const QRect& rect)
+{
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, true);
+    const QRectF r = QRectF(rect).adjusted(2, 2, -2, -2);
+    QPainterPath path;
+    path.addRoundedRect(r, 10, 10);
+    p.fillPath(path, WINDOW_BG);
+    p.setPen(QPen(BRONZE, 3));
+    p.drawPath(path);
+    QPainterPath inner;
+    inner.addRoundedRect(r.adjusted(4, 4, -4, -4), 7, 7);
+    p.setPen(QPen(QColor(214, 120, 255, 110), 2));
+    p.drawPath(inner);
+    p.restore();
 }
 
 QString popupCss()
@@ -230,9 +278,36 @@ ObsidiumDialog::ObsidiumDialog(QWidget* parent) : QDialog(parent)
     titleRow->addStretch(1);
     auto* closeButton = new ObsidiumIconButton(ObsidiumIconButton::Icon::Close, this);
     closeButton->setToolTip(tr("Закрыть"));
-    connect(closeButton, &QAbstractButton::clicked, this, &QDialog::accept);
+    connect(closeButton, &QAbstractButton::clicked, this, &QDialog::reject);
     titleRow->addWidget(closeButton);
     m_body->addLayout(titleRow);
+}
+
+bool ObsidiumDialog::confirm(QWidget* parent, const QString& title, const QString& text, const QString& yes, const QString& no)
+{
+    ObsidiumDialog dialog(parent);
+    dialog.setTitle(title);
+    dialog.setFixedWidth(400);
+    auto* label = new QLabel(text, &dialog);
+    label->setWordWrap(true);
+    label->setStyleSheet(labelCss(Obsidium::TEXT_COLOR, TEXT_PX));
+    dialog.body()->addWidget(label);
+    dialog.body()->addSpacing(4);
+    auto* buttons = new QHBoxLayout();
+    buttons->addStretch(1);
+    auto* noButton = new QPushButton(no, &dialog);
+    auto* yesButton = new QPushButton(yes, &dialog);
+    for (auto* button : { noButton, yesButton }) {
+        button->setStyleSheet(buttonCss());
+        button->setCursor(Qt::PointingHandCursor);
+        buttons->addWidget(button);
+    }
+    noButton->setDefault(true);  // Enter keeps things as they are
+    QObject::connect(noButton, &QPushButton::clicked, &dialog, &QDialog::reject);
+    QObject::connect(yesButton, &QPushButton::clicked, &dialog, &QDialog::accept);
+    dialog.body()->addLayout(buttons);
+    dialog.adjustSize();
+    return dialog.exec() == QDialog::Accepted;
 }
 
 void ObsidiumDialog::setTitle(const QString& title)
@@ -244,17 +319,7 @@ void ObsidiumDialog::setTitle(const QString& title)
 void ObsidiumDialog::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing, true);
-    const QRectF r = QRectF(rect()).adjusted(2, 2, -2, -2);
-    QPainterPath path;
-    path.addRoundedRect(r, 10, 10);
-    p.fillPath(path, WINDOW_BG);
-    p.setPen(QPen(BRONZE, 3));
-    p.drawPath(path);
-    QPainterPath inner;
-    inner.addRoundedRect(r.adjusted(4, 4, -4, -4), 7, 7);
-    p.setPen(QPen(QColor(214, 120, 255, 110), 2));
-    p.drawPath(inner);
+    paintWindowFrame(p, rect());
 }
 
 void ObsidiumDialog::mousePressEvent(QMouseEvent* event)

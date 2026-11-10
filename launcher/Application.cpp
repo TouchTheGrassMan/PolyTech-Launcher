@@ -819,6 +819,8 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_settings->registerSetting("InstSortMode", "Name");
         m_settings->registerSetting("InstRenamingMode", "AskEverytime");
         m_settings->registerSetting("SelectedInstance", QString());
+        // Obsidium: the instance started last, chosen again when the launcher opens
+        m_settings->registerSetting("LastLaunchedInstance", QString());
 
         // Window state and geometry
         m_settings->registerSetting("MainWindowState", "");
@@ -1622,6 +1624,7 @@ bool Application::launch(BaseInstance* instance,
     if (m_updateRunning) {
         qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
     } else if (instance->canLaunch()) {
+        m_settings->set("LastLaunchedInstance", instance->id());
         QMutexLocker locker(&m_instanceExtrasMutex);
         auto& extras = m_instanceExtras[instance->id()];
         auto window = extras.window;

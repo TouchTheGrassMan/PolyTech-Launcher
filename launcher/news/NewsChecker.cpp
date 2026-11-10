@@ -59,7 +59,11 @@ void NewsChecker::reloadNews(const QString& newUrl)
         return;
     }
 
-    m_entry = APPLICATION->metacache()->resolveEntry("feed", "feed.xml");
+    // Obsidium: a cache file of its own (the old "feed.xml" still holds PineconeMC's news), and
+    // always asked again: a news feed changes without its address changing, and an unchanged
+    // file costs only a "not modified" answer.
+    m_entry = APPLICATION->metacache()->resolveEntry("feed", "obsidium-news.xml");
+    m_entry->setStale(true);
 
     qDebug() << "Reloading news.";
 

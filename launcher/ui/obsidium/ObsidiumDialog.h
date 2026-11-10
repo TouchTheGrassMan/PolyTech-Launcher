@@ -7,6 +7,7 @@
 #include <QPixmap>
 
 class QLabel;
+class QPainter;
 class QVBoxLayout;
 
 /// Obsidium: the look of the launcher's own windows - dark panels, bronze frames, the purple of
@@ -26,6 +27,8 @@ QString rgb(const QColor& c);
 /// "font-family: ...; font-size: ...px;" of the pixel font
 QString fontCss(int px);
 QString buttonCss();
+/// The button the window wants pressed: bright obsidian purple.
+QString accentButtonCss();
 QString lineEditCss();
 QString listCss();
 QString radioCss();
@@ -36,6 +39,10 @@ QString hintCss();
 QString labelCss(const QColor& color, int px);
 /// Tooltips as in the game and menus in the launcher's look, for the whole application.
 QString popupCss();
+/// Progress bars and scroll bars of a window in the launcher's look.
+QString progressCss();
+/// The frame of a launcher window (the rounded dark panel with the bronze edge).
+void paintWindowFrame(QPainter& painter, const QRect& rect);
 /// The face of a skin (with the hat layer).
 QPixmap faceOf(const QImage& skin, int size);
 
@@ -67,6 +74,8 @@ class ObsidiumDialog : public QDialog {
     explicit ObsidiumDialog(QWidget* parent = nullptr);
 
     void setTitle(const QString& title);
+    /// A question in the launcher's look; true for `yes`.
+    static bool confirm(QWidget* parent, const QString& title, const QString& text, const QString& yes, const QString& no);
     /// Where the content goes, under the title.
     QVBoxLayout* body() const { return m_body; }
 

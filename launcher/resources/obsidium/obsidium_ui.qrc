@@ -1,9 +1,10 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
     <qresource prefix="/obsidium">
-        <file>frame.png</file>
+        <file>frame_cave.png</file>
         <file>frame_winter.png</file>
         <file>default_skin.png</file>
+        <file>polytech_preview.png</file>
         <file>minecraft.ttf</file>
     </qresource>
 </RCC>

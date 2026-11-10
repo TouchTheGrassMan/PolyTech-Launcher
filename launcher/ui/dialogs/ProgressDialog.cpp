@@ -37,6 +37,12 @@
 #include <QPoint>
 #include "ui_ProgressDialog.h"
 
+#include <QMouseEvent>
+#include <QPainter>
+#include <QWindow>
+
+#include "ui/obsidium/ObsidiumDialog.h"
+
 #include <QDebug>
 #include <QKeyEvent>
 #include <limits>
@@ -64,6 +70,13 @@ ProgressDialog::ProgressDialog(QWidget* parent) : QDialog(parent), ui(new Ui::Pr
     ui->setupUi(this);
     ui->taskProgressScrollArea->setHidden(true);
     this->setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
+    // Obsidium: drawn like the launcher's other windows, without the system frame
+    setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground);
+    setProperty("obsidiumRounded", true);
+    setSizeGripEnabled(false);  // no corner grip on the drawn frame
+    ui->verticalLayout->setContentsMargins(18, 16, 18, 18);
+    setStyleSheet(ObsidiumStyle::progressCss());
     setAttribute(Qt::WidgetAttribute::WA_QuitOnClose, true);
     changeProgress(0, 100);
     updateSize(true);
@@ -77,14 +90,21 @@ void ProgressDialog::setSkipButton(bool present, QString label)
     ui->skipButton->setFocusPolicy(Qt::ClickFocus);
     ui->skipButton->setEnabled(present);
     ui->skipButton->setVisible(present);
-    ui->skipButton->setText(label);
+    // Obsidium: whatever the task calls it, the button cancels (after a question)
+    Q_UNUSED(label);
+    ui->skipButton->setText(tr("Отмена"));
     updateSize();
 }
 
 void ProgressDialog::on_skipButton_clicked(bool checked)
 {
     Q_UNUSED(checked);
-    if (ui->skipButton->isEnabled())  // prevent other triggers from aborting
+    if (!ui->skipButton->isEnabled())  // prevent other triggers from aborting
+        return;
+    const QString question = m_cancelQuestion.isEmpty() ? tr("Вы действительно хотите прервать загрузку?") : m_cancelQuestion;
+    if (!ObsidiumDialog::confirm(this, tr("Отмена загрузки"), question, tr("Прервать"), tr("Продолжить")))
+        return;
+    if (m_task && m_task->isRunning())  // (it may have finished while the question was open)
         m_task->abort();
 }
 
@@ -152,10 +172,11 @@ int ProgressDialog::execWithTask(Task* task)
     this->m_taskConnections.push_back(connect(task, &Task::progress, this, &ProgressDialog::changeProgress));
     this->m_taskConnections.push_back(connect(task, &Task::aborted, this, &ProgressDialog::hide));
     this->m_taskConnections.push_back(connect(task, &Task::abortStatusChanged, ui->skipButton, &QPushButton::setEnabled));
-    this->m_taskConnections.push_back(connect(task, &Task::abortButtonTextChanged, ui->skipButton, &QPushButton::setText));
+    // (the task's own name for the button is not used: it is always "Отмена")
 
     m_is_multi_step = task->isMultiStep();
-    ui->taskProgressScrollArea->setHidden(!m_is_multi_step);
+    // Obsidium: only the main progress bar is shown, not one per step
+    ui->taskProgressScrollArea->setHidden(true);
     updateSize();
 
     // It's a good idea to start the task after we entered the dialog's event loop :^)
@@ -233,10 +254,6 @@ void ProgressDialog::addTaskProgress(TaskStepProgress const& progress)
 void ProgressDialog::changeStepProgress(TaskStepProgress const& task_progress)
 {
     m_is_multi_step = true;
-    if (ui->taskProgressScrollArea->isHidden()) {
-        ui->taskProgressScrollArea->setHidden(false);
-        updateSize();
-    }
 
     if (!taskProgress.contains(task_progress.uid))
         addTaskProgress(task_progress);
@@ -285,4 +302,21 @@ void ProgressDialog::closeEvent(QCloseEvent* e)
     } else {
         QDialog::closeEvent(e);
     }
+}
+
+void ProgressDialog::paintEvent(QPaintEvent*)
+{
+    QPainter p(this);
+    ObsidiumStyle::paintWindowFrame(p, rect());
+}
+
+void ProgressDialog::mousePressEvent(QMouseEvent* e)
+{
+    // no title bar: the window is moved by any free spot
+    if (e->button() == Qt::LeftButton && windowHandle()) {
+        windowHandle()->startSystemMove();
+        e->accept();
+        return;
+    }
+    QDialog::mousePressEvent(e);
 }

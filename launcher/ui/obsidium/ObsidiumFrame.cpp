@@ -33,37 +33,38 @@ QFont pixelFont(qreal pixelSize)
 }
 
 namespace {
-Theme makeNether()
+Theme makeCave()
 {
     Theme t;
-    t.id = QStringLiteral("nether");
-    t.name = QObject::tr("Незер");
-    t.picture = QStringLiteral(":/obsidium/frame.png");
-    t.base = { 1570, 1002 };
+    t.id = QStringLiteral("cave");
+    t.name = QObject::tr("Пещера");
+    t.picture = QStringLiteral(":/obsidium/frame_cave.png");
+    t.base = { 1650, 1082 };
     auto set = [&t](Slot slot, QRect r) { t.rects[int(slot)] = r; };
-    set(Slot::Minimize, { 1368, 65, 62, 53 });
-    set(Slot::Close, { 1438, 65, 62, 53 });
-    set(Slot::Left1, { 108, 330, 277, 52 });
-    set(Slot::Left2, { 108, 396, 277, 52 });
-    set(Slot::Left3, { 108, 461, 277, 52 });
-    set(Slot::Left4, { 108, 527, 277, 53 });
-    set(Slot::Left5, { 108, 595, 277, 52 });
-    set(Slot::Tab1, { 472, 348, 196, 44 });
-    set(Slot::Tab2, { 680, 348, 196, 44 });
-    set(Slot::Tab3, { 888, 348, 196, 44 });
-    set(Slot::Content, { 446, 402, 642, 398 });
-    set(Slot::Nick, { 1155, 300, 325, 42 });
-    set(Slot::Skin, { 1178, 362, 279, 262 });
-    set(Slot::Profile, { 1152, 662, 333, 50 });
-    set(Slot::Play, { 1152, 722, 333, 110 });
+    set(Slot::Minimize, { 1410, 101, 64, 60 });
+    set(Slot::Close, { 1483, 101, 62, 60 });
+    set(Slot::Left1, { 146, 369, 280, 54 });
+    set(Slot::Left2, { 146, 435, 280, 54 });
+    set(Slot::Left3, { 146, 500, 280, 54 });
+    set(Slot::Left4, { 146, 567, 280, 54 });
+    set(Slot::Left5, { 146, 634, 280, 54 });
+    set(Slot::Tab1, { 511, 388, 201, 49 });
+    set(Slot::Tab2, { 721, 388, 199, 49 });
+    set(Slot::Tab3, { 929, 388, 200, 49 });
+    set(Slot::Content, { 476, 444, 672, 396 });
+    set(Slot::Nick, { 1192, 332, 326, 40 });
+    set(Slot::Skin, { 1220, 402, 284, 270 });
+    set(Slot::Profile, { 1196, 704, 332, 48 });
+    set(Slot::Play, { 1196, 762, 334, 110 });
     return t;
 }
 
-Theme makeWinter()
+Theme makeNewYear()
 {
     Theme t;
-    t.id = QStringLiteral("winter");
-    t.name = QObject::tr("Зимнее");
+    t.id = QStringLiteral("newyear");
+    t.name = QObject::tr("Новогоднее");
+    t.available = false;  // for the New Year holidays: switched on by setting this to true
     t.picture = QStringLiteral(":/obsidium/frame_winter.png");
     t.base = { 1650, 1082 };
     auto set = [&t](Slot slot, QRect r) { t.rects[int(slot)] = r; };
@@ -88,14 +89,14 @@ Theme makeWinter()
 
 const QList<Theme>& themes()
 {
-    static const QList<Theme> s_themes = { makeWinter(), makeNether() };
+    static const QList<Theme> s_themes = { makeCave(), makeNewYear() };
     return s_themes;
 }
 
 const Theme& theme(const QString& id)
 {
     for (const auto& t : themes()) {
-        if (t.id == id)
+        if (t.id == id && t.available)
             return t;
     }
     return themes().first();
@@ -121,6 +122,37 @@ void ObsidiumButton::setScale(qreal scale)
     update();
 }
 
+void ObsidiumButton::setAttention(bool attention)
+{
+    if (attention == (m_pulse != nullptr))
+        return;
+    if (!attention) {
+        delete m_pulse;
+        m_pulse = nullptr;
+        m_pulseLevel = 0;
+        update();
+        return;
+    }
+    m_pulse = new QVariantAnimation(this);
+    m_pulse->setDuration(1300);
+    m_pulse->setStartValue(0.0);
+    m_pulse->setKeyValueAt(0.5, 1.0);
+    m_pulse->setEndValue(0.0);
+    m_pulse->setEasingCurve(QEasingCurve::InOutSine);
+    m_pulse->setLoopCount(-1);
+    connect(m_pulse, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
+        m_pulseLevel = value.toReal();
+        update();
+    });
+    m_pulse->start();
+}
+
+void ObsidiumButton::setDanger(bool danger)
+{
+    m_danger = danger;
+    update();
+}
+
 void ObsidiumButton::enterEvent(QEnterEvent* event)
 {
     m_hover = true;
@@ -142,15 +174,41 @@ void ObsidiumButton::paintEvent(QPaintEvent*)
     const QRectF r = QRectF(rect()).adjusted(3 * m_scale, 3 * m_scale, -3 * m_scale, -3 * m_scale);
     const qreal radius = 6 * m_scale;
 
-    // The picture already draws the button: only light it up.
     const bool down = isDown();
     const bool active = isChecked();
+
+    if (m_danger) {
+        // the purple crystal turns red: tinted, the frame around it left as it is
+        const qreal inset = 10 * m_scale;
+        QPainterPath crystal;
+        crystal.addRoundedRect(QRectF(rect()).adjusted(inset, inset, -inset, -inset), radius, radius);
+        p.save();
+        p.setCompositionMode(QPainter::CompositionMode_Multiply);
+        p.fillPath(crystal, QColor(255, 80, 80));
+        p.setCompositionMode(QPainter::CompositionMode_Screen);
+        p.fillPath(crystal, QColor(110, 0, 0));
+        p.restore();
+    }
+
+    // The picture already draws the button: only light it up.
     if (isEnabled() && (m_hover || down || active)) {
         QPainterPath path;
         path.addRoundedRect(r, radius, radius);
-        QColor glow = m_style == Style::Bare ? QColor(255, 255, 255) : Obsidium::ACCENT_COLOR;
+        QColor glow = m_style == Style::Bare ? QColor(255, 255, 255) : m_danger ? QColor(255, 90, 90) : Obsidium::ACCENT_COLOR;
         glow.setAlpha(down ? 80 : active ? 60 : 30);
         p.fillPath(path, glow);
+    }
+    if (isEnabled() && m_pulse && !(m_hover || down)) {
+        // the call for attention: a glow coming and going, with a bright edge
+        QPainterPath path;
+        path.addRoundedRect(r, radius, radius);
+        QColor glow = Obsidium::ACCENT_COLOR;
+        glow.setAlphaF(float(0.08 + 0.42 * m_pulseLevel));
+        p.fillPath(path, glow);
+        QColor edge = Obsidium::ACCENT_COLOR;
+        edge.setAlphaF(float(0.25 + 0.75 * m_pulseLevel));
+        p.setPen(QPen(edge, qMax<qreal>(1.0, 2 * m_scale)));
+        p.drawPath(path);
     }
 
     if (m_style == Style::Bare || text().isEmpty())
@@ -252,7 +310,7 @@ class WindowDim : public QWidget {
         setAttribute(Qt::WA_TransparentForMouseEvents);
         setAttribute(Qt::WA_TranslucentBackground);
         // the launcher's own windows are rounded (see ObsidiumDialog::paintEvent)
-        m_rounded = window->inherits("ObsidiumDialog");
+        m_rounded = window->inherits("ObsidiumDialog") || window->property("obsidiumRounded").toBool();
         m_fade = new QVariantAnimation(this);
         m_fade->setDuration(160);
         connect(m_fade, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {

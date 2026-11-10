@@ -175,8 +175,16 @@ endif()
 ##################################### Set Application options #####################################
 
 ######## Set URLs ########
-set(Launcher_NEWS_RSS_URL "https://pineconemc.ru/feed/feed.xml" CACHE STRING "URL to fetch Prism Launcher's news RSS feed from.")
-set(Launcher_NEWS_OPEN_URL "https://discord.gg/5kcBCvnbTp" CACHE STRING "URL that gets opened when the user clicks 'More News'")
+# Obsidium: the news are news.xml of this repository (edited by a commit, no new launcher needed)
+set(Launcher_NEWS_RSS_URL "https://raw.githubusercontent.com/TouchTheGrassMan/PolyTech-Launcher/develop/news.xml" CACHE STRING "URL to fetch the launcher's news feed from.")
+set(Launcher_NEWS_OPEN_URL "https://github.com/TouchTheGrassMan/PolyTech-Launcher/releases" CACHE STRING "URL that gets opened when the user clicks 'More News'")
+# (a build folder configured before still has PineconeMC's feed in its CMake cache)
+if(Launcher_NEWS_RSS_URL STREQUAL "https://pineconemc.ru/feed/feed.xml")
+    set(Launcher_NEWS_RSS_URL "https://raw.githubusercontent.com/TouchTheGrassMan/PolyTech-Launcher/develop/news.xml" CACHE STRING "URL to fetch the launcher's news feed from." FORCE)
+endif()
+if(Launcher_NEWS_OPEN_URL STREQUAL "https://discord.gg/5kcBCvnbTp")
+    set(Launcher_NEWS_OPEN_URL "https://github.com/TouchTheGrassMan/PolyTech-Launcher/releases" CACHE STRING "URL that gets opened when the user clicks 'More News'" FORCE)
+endif()
 set(Launcher_WIKI_URL "https://prismlauncher.org/wiki/" CACHE STRING "URL that gets opened when the user clicks 'Launcher Help'")
 set(Launcher_HELP_URL "https://prismlauncher.org/wiki/help-pages/%1" CACHE STRING "URL (with arg %1 to be substituted with page-id) that gets opened when the user requests help in a dialog window")
 set(Launcher_LOGIN_CALLBACK_URL "https://pineconemc.ru/successful-login" CACHE STRING "URL that gets opened when the user successfully logins.")
@@ -185,7 +193,7 @@ set(Launcher_LEGACY_FMLLIBS_BASE_URL "https://files.pineconemc.ru/fmllibs/" CACH
 ######## Set version numbers ########
 set(Launcher_VERSION_MAJOR 0)
 set(Launcher_VERSION_MINOR 2)
-set(Launcher_VERSION_PATCH 1)
+set(Launcher_VERSION_PATCH 0)
 
 set(Launcher_VERSION_NAME "${Launcher_VERSION_MAJOR}.${Launcher_VERSION_MINOR}.${Launcher_VERSION_PATCH}")
 set(Launcher_VERSION_NAME4 "${Launcher_VERSION_MAJOR}.${Launcher_VERSION_MINOR}.${Launcher_VERSION_PATCH}.0")

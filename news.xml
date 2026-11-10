@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Новости лаунчера Obsidium (вкладка «Новости»).
+  Лаунчер скачивает этот файл из репозитория при каждом запуске, так что новость
+  публикуется обычным коммитом сюда, без новой версии лаунчера.
+  Каждая новость — свой <entry>, самые свежие сверху:
+    <title>   — заголовок
+    <id>      — ссылка, куда ведёт новость
+    <updated> — дата
+    <content> — текст (можно с HTML: <b>, <br>, <a href="...">)
+-->
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Новости PolyTech</title>
+  <id>https://github.com/TouchTheGrassMan/PolyTech-Launcher</id>
+  <updated>2026-11-10T12:00:00Z</updated>
+  <entry>
+    <title>Скоро здесь будут новости</title>
+    <id>https://github.com/TouchTheGrassMan/PolyTech-Launcher/releases</id>
+    <updated>2026-11-10T12:00:00Z</updated>
+    <content type="html">Здесь будут новости сервера и сборки PolyTech: обновления, события и всё самое важное. Загляните чуть позже!</content>
+  </entry>
+</feed>

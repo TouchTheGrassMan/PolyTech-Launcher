@@ -2,62 +2,62 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-/*
- *  Prism Launcher - Minecraft Launcher
- *  Copyright (C) 2023 Rachel Powers <508861+Ryex@users.noreply.github.com>
- *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, version 3.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- */
-
 #include "UpdateAvailableDialog.h"
+
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QPushButton>
+#include <QTextBrowser>
+#include <QVBoxLayout>
+
 #include "BuildConfig.h"
 #include "Markdown.h"
 #include "StringUtils.h"
-#include "ui_UpdateAvailableDialog.h"
+#include "ui/obsidium/ObsidiumFrame.h"
 
 UpdateAvailableDialog::UpdateAvailableDialog(const QString& currentVersion,
                                              const QString& availableVersion,
                                              const QString& releaseNotes,
                                              QWidget* parent)
-    : QDialog(parent), ui(new Ui::UpdateAvailableDialog)
+    : ObsidiumDialog(parent)
 {
-    ui->setupUi(this);
+    using namespace ObsidiumStyle;
+    setTitle(tr("Доступно обновление"));
+    setFixedSize(520, 400);
 
-    QString launcherName = BuildConfig.LAUNCHER_DISPLAYNAME;
+    auto* headline = new QLabel(tr("Вышла новая версия %1 — %2").arg(BuildConfig.LAUNCHER_DISPLAYNAME, availableVersion), this);
+    headline->setWordWrap(true);
+    headline->setStyleSheet(hintCss());
+    body()->addWidget(headline);
 
-    ui->headerLabel->setText(tr("A new version of %1 is available!").arg(launcherName));
-    ui->versionAvailableLabel->setText(
-        tr("Version %1 is now available - you have %2 . Would you like to download it now?").arg(availableVersion).arg(currentVersion));
-    ui->icon->setPixmap(QIcon::fromTheme("checkupdate").pixmap(64));
+    auto* current = new QLabel(tr("Сейчас у вас версия %1. Что нового:").arg(currentVersion), this);
+    current->setStyleSheet(labelCss(MUTED, SMALL_PX));
+    body()->addWidget(current);
 
-    auto releaseNotesHtml = markdownToHTML(releaseNotes);
-    ui->releaseNotes->setHtml(StringUtils::htmlListPatch(releaseNotesHtml));
-    ui->releaseNotes->setOpenExternalLinks(true);
+    auto* notes = new QTextBrowser(this);
+    notes->setObjectName(QStringLiteral("releaseNotes"));
+    notes->setOpenExternalLinks(true);
+    notes->setHtml(StringUtils::htmlListPatch(markdownToHTML(releaseNotes)));
+    notes->setStyleSheet(progressCss() + QStringLiteral("QTextBrowser { %1 color: %2; background: %3; border: 2px solid %4; border-radius: 6px; "
+                                                        "padding: 4px; }")
+                                             .arg(fontCss(TEXT_PX), rgb(Obsidium::TEXT_COLOR), rgb(PANEL_BG), rgb(BRONZE)));
+    body()->addWidget(notes, 1);
 
-    connect(ui->skipButton, &QPushButton::clicked, this, [this]() {
-        setResult(ResultCode::Skip);
-        done(ResultCode::Skip);
-    });
+    auto* buttons = new QHBoxLayout();
+    buttons->addStretch(1);
+    auto* laterButton = new QPushButton(tr("Позже"), this);
+    laterButton->setStyleSheet(buttonCss());
+    laterButton->setCursor(Qt::PointingHandCursor);
+    laterButton->setAutoDefault(false);
+    auto* installButton = new QPushButton(tr("Обновить"), this);
+    installButton->setStyleSheet(accentButtonCss());
+    installButton->setCursor(Qt::PointingHandCursor);
+    installButton->setDefault(true);
+    buttons->addWidget(laterButton);
+    buttons->addWidget(installButton);
+    body()->addLayout(buttons);
 
-    connect(ui->delayButton, &QPushButton::clicked, this, [this]() {
-        setResult(ResultCode::DontInstall);
-        done(ResultCode::DontInstall);
-    });
-
-    connect(ui->installButton, &QPushButton::clicked, this, [this]() {
-        setResult(ResultCode::Install);
-        done(ResultCode::Install);
-    });
+    connect(laterButton, &QPushButton::clicked, this, [this] { done(ResultCode::DontInstall); });
+    connect(installButton, &QPushButton::clicked, this, [this] { done(ResultCode::Install); });
+    installButton->setFocus();
 }

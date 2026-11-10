@@ -66,6 +66,8 @@ class ProgressDialog : public QDialog {
     int execWithTask(std::unique_ptr<Task>& task);
 
     void setSkipButton(bool present, QString label = QString());
+    /// Obsidium: the question asked before the task is cancelled.
+    void setCancelQuestion(const QString& question) { m_cancelQuestion = question; }
 
     Task* getTask();
 
@@ -84,6 +86,8 @@ class ProgressDialog : public QDialog {
    protected:
     virtual void keyPressEvent(QKeyEvent* e);
     virtual void closeEvent(QCloseEvent* e);
+    void paintEvent(QPaintEvent* e) override;
+    void mousePressEvent(QMouseEvent* e) override;
 
    private:
     bool handleImmediateResult(QDialog::DialogCode& result);
@@ -97,5 +101,6 @@ class ProgressDialog : public QDialog {
     QList<QMetaObject::Connection> m_taskConnections;
 
     bool m_is_multi_step = false;
+    QString m_cancelQuestion;
     QHash<QUuid, SubTaskProgressBar*> taskProgress;
 };
