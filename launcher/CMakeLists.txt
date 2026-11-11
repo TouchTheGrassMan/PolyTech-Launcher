@@ -868,6 +868,8 @@ SET(LAUNCHER_SOURCES
     ui/obsidium/ObsidiumFrame.cpp
     ui/obsidium/DeveloperPage.cpp
     ui/obsidium/DeveloperPage.h
+    ui/obsidium/ObsidiumInstanceList.cpp
+    ui/obsidium/ObsidiumInstanceList.h
     ui/obsidium/ObsidiumDialog.cpp
     ui/obsidium/ObsidiumDialog.h
     ui/obsidium/ProfileDialog.cpp

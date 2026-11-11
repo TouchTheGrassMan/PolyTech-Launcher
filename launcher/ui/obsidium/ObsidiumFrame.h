@@ -43,6 +43,7 @@ enum class Slot {
     Skin,
     Profile,
     Play,
+    Version,  // "Версия X.X.X" at the top, in the middle
     Count
 };
 
@@ -108,6 +109,23 @@ class ObsidiumButton : public QAbstractButton {
     QVariantAnimation* m_pulse = nullptr;
     qreal m_pulseLevel = 0;
     bool m_danger = false;
+};
+
+/// A line of text drawn on the picture in its font, with a hard shadow (the launcher's version).
+/// Painted by hand: a graphics effect on a widget of the translucent window breaks its painting on Windows.
+class ObsidiumCaption : public QWidget {
+   public:
+    ObsidiumCaption(const QString& text, qreal basePixelSize, Qt::Alignment alignment = Qt::AlignCenter, QWidget* parent = nullptr);
+    void setScale(qreal scale);
+
+   protected:
+    void paintEvent(QPaintEvent* event) override;
+
+   private:
+    QString m_text;
+    qreal m_basePx;
+    Qt::Alignment m_alignment;
+    qreal m_scale = 1.0;
 };
 
 /// The window's picture, with the widgets placed on it.

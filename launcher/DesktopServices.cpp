@@ -46,7 +46,18 @@ bool openPath(const QFileInfo& path, bool ensureFolderPathExists)
     if (ensureFolderPathExists) {
         FS::ensureFolderPathExists(path);
     }
-    return openUrl(QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath()));
+    const QFileInfo target(path.absoluteFilePath());
+#ifdef Q_OS_WIN
+    // A folder goes to Explorer itself: the shell's "open" may pick something else for a path without an
+    // extension (a shortcut or a program of the same name beside it) or do nothing at all.
+    if (target.isDir()) {
+        const QString native = QDir::toNativeSeparators(QDir::cleanPath(target.absoluteFilePath()));
+        if (QProcess::startDetached(QStringLiteral("explorer.exe"), { native }))
+            return true;
+        qWarning() << "Explorer did not start for" << native;
+    }
+#endif
+    return openUrl(QUrl::fromLocalFile(target.absoluteFilePath()));
 }
 
 bool openPath(const QString& path, bool ensureFolderPathExists)

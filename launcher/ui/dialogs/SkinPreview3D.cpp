@@ -7,6 +7,8 @@
 #include <QtMath>
 #include <QMouseEvent>
 #include <QPaintEvent>
+#include <QFontInfo>
+#include <QFontMetrics>
 #include <QPainter>
 #include <QPalette>
 #include <QPolygonF>
@@ -84,7 +86,20 @@ void SkinPreview3D::paintEvent(QPaintEvent*)
 
     if (m_skin.isNull() || m_boxes.isEmpty()) {
         p.setPen(palette().color(QPalette::WindowText));
-        p.drawText(rect(), Qt::AlignCenter, tr("Нет скина"));
+        if (!m_customEmpty) {
+            p.drawText(rect(), Qt::AlignCenter, tr("Нет скина"));
+            return;
+        }
+        // the given font, smaller while the text is wider than the widget (with a margin)
+        QFont font = m_emptyFont;
+        const int room = qMax(1, width() - 2 * qMax(4, width() / 12));
+        int px = font.pixelSize() > 0 ? font.pixelSize() : QFontInfo(font).pixelSize();
+        while (px > 6 && QFontMetrics(font).horizontalAdvance(m_emptyText) > room) {
+            px--;
+            font.setPixelSize(px);
+        }
+        p.setFont(font);
+        p.drawText(rect(), Qt::AlignCenter, m_emptyText);
         return;
     }
 

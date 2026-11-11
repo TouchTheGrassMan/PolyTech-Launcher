@@ -64,6 +64,7 @@ class ObsidiumButton;
 class QStackedWidget;
 class QTextBrowser;
 class QPushButton;
+class ObsidiumInstanceList;
 class SkinPreview3D;
 class KonamiCode;
 class InstanceTask;
@@ -286,8 +287,9 @@ class MainWindow : public QMainWindow {
     ObsidiumFrame* m_obsidium = nullptr;
     QList<ObsidiumButton*> m_obsTabs;
     QStackedWidget* m_obsPages = nullptr;
-    QLabel* m_obsInstanceName = nullptr;
-    QPushButton* m_obsActions = nullptr;
+    ObsidiumInstanceList* m_obsList = nullptr;
+    QMenu* m_obsActionsMenu = nullptr;
+    QString m_obsLastUserInstance;  // the user's instance chosen when the tab was left
     QTextBrowser* m_obsNews = nullptr;
     QLabel* m_obsNick = nullptr;
     SkinPreview3D* m_obsSkin = nullptr;

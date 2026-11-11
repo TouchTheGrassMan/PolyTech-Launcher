@@ -303,6 +303,11 @@ bool ObsidiumDialog::confirm(QWidget* parent, const QString& title, const QStrin
         buttons->addWidget(button);
     }
     noButton->setDefault(true);  // Enter keeps things as they are
+    if (no.isEmpty()) {
+        // only a message: one button that closes it
+        noButton->hide();
+        yesButton->setDefault(true);
+    }
     QObject::connect(noButton, &QPushButton::clicked, &dialog, &QDialog::reject);
     QObject::connect(yesButton, &QPushButton::clicked, &dialog, &QDialog::accept);
     dialog.body()->addLayout(buttons);

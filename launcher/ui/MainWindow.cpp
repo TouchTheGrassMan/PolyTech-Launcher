@@ -110,6 +110,7 @@
 #include "ui/instanceview/InstanceDelegate.h"
 #include "ui/instanceview/InstanceProxyModel.h"
 #include "ui/instanceview/InstanceView.h"
+#include "ui/obsidium/ObsidiumInstanceList.h"
 #include "ui/themes/ITheme.h"
 #include "ui/themes/ThemeManager.h"
 #include "ui/widgets/LabeledToolButton.h"
@@ -788,7 +789,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* ev)
         on_actionChangeSkin_triggered();
         return true;
     }
-    if (obj == view) {
+    if (obj == view || (m_obsList && obj == m_obsList)) {
         if (ev->type() == QEvent::KeyPress) {
             secretEventFilter->input(ev);
             QKeyEvent* keyEvent = static_cast<QKeyEvent*>(ev);
@@ -1295,8 +1296,11 @@ void MainWindow::undoTrashInstance()
 
 void MainWindow::on_actionViewLauncherRootFolder_triggered()
 {
-    // the data folder itself, not the working directory (that differs for an installed launcher)
-    DesktopServices::openPath(APPLICATION->dataRoot());
+    // A portable launcher: the folder it was unpacked to, wherever that is (its data is there or in its UserData).
+    // An installed one: its data folder (AppData), not the working directory or the program's folder.
+    const QString root = APPLICATION->isPortable() ? APPLICATION->root() : APPLICATION->dataRoot();
+    qDebug() << "Launcher root folder:" << root << (APPLICATION->isPortable() ? "(portable)" : "(installed)");
+    DesktopServices::openPath(root, true);
 }
 
 void MainWindow::on_actionViewInstanceFolder_triggered()
@@ -1568,7 +1572,11 @@ void MainWindow::on_actionExportInstanceFlamePack_triggered()
 void MainWindow::on_actionRenameInstance_triggered()
 {
     if (m_selectedInstance) {
-        view->edit(view->currentIndex());
+        // Obsidium: the name is edited in its list (the classic view is hidden behind it)
+        if (m_obsList && m_obsList->isVisible())
+            m_obsList->edit(m_obsList->currentIndex());
+        else
+            view->edit(view->currentIndex());
     }
 }
 

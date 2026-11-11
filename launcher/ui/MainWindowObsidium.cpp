@@ -16,6 +16,9 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
+#include <QRegularExpression>
+#include <QLineEdit>
+#include <QInputDialog>
 #include <QPushButton>
 #include <QScreen>
 #include <QShowEvent>
@@ -25,6 +28,7 @@
 
 #include "Application.h"
 #include "BaseInstance.h"
+#include "BuildConfig.h"
 #include "FileSystem.h"
 #include "PolytechSkins.h"
 #include "minecraft/auth/AccountList.h"
@@ -36,6 +40,7 @@
 #include "ui/obsidium/DeveloperPage.h"
 #include "ui/obsidium/ObsidiumDialog.h"
 #include "ui/obsidium/ObsidiumFrame.h"
+#include "ui/obsidium/ObsidiumInstanceList.h"
 
 namespace {
 
@@ -46,11 +51,6 @@ const char* PANEL_STYLE =
     "QScrollBar::handle:vertical { background: #6b3f8f; min-height: 24px; border-radius: 4px; }"
     "QScrollBar::add-line, QScrollBar::sub-line { height: 0; }"
     "QScrollBar::add-page, QScrollBar::sub-page { background: none; }";
-
-const char* ACTIONS_STYLE =
-    "QPushButton { color: #e9ddc9; background: rgba(60, 30, 80, 200); border: 1px solid #8a4fb8; border-radius: 4px; padding: 3px 12px; }"
-    "QPushButton:hover { background: rgba(110, 50, 150, 220); }"
-    "QPushButton::menu-indicator { subcontrol-position: right center; right: 4px; }";
 
 }  // namespace
 
@@ -93,6 +93,12 @@ void MainWindow::setupObsidiumWindow()
     closeButton->setToolTip(tr("Закрыть"));
     connect(closeButton, &QAbstractButton::clicked, this, &QWidget::close);
 
+    // ---- the launcher's version, small, at the top in the middle (on the arch above the logo)
+    auto* version = new ObsidiumCaption(tr("Версия %1").arg(BuildConfig.versionString()), 15);
+    version->setScale(m_obsidium->scale());
+    connect(m_obsidium, &ObsidiumFrame::scaleChanged, version, [version](qreal scale) { version->setScale(scale); });
+    m_obsidium->place(version, Slot::Version);
+
     // ---- left column
     auto* addButton = m_obsidium->addButton(tr("Добавить сборку"), Style::Plain, Slot::Left1, 21);
     connect(addButton, &QAbstractButton::clicked, ui->actionAddInstance, &QAction::trigger);
@@ -124,46 +130,66 @@ void MainWindow::setupObsidiumWindow()
     m_obsPages = new QStackedWidget();
     m_obsPages->setStyleSheet(PANEL_STYLE);
 
+    // The user's instances: a plain list in the launcher's look. It shows the classic view's model and
+    // selection, so everything following the selection keeps working; the classic view stays hidden.
     auto* instancesPage = new QWidget();
     auto* instancesLayout = new QVBoxLayout(instancesPage);
-    instancesLayout->setContentsMargins(6, 4, 6, 4);
-    instancesLayout->setSpacing(4);
-    auto* topBar = new QHBoxLayout();
-    m_obsInstanceName = new QLabel();
-    m_obsInstanceName->setStyleSheet("color: #e9ddc9;");
-    topBar->addWidget(m_obsInstanceName, 1);
-    // Temporary: the selected instance's actions, until they get their own place in the picture.
-    m_obsActions = new QPushButton(tr("Действия"));
-    m_obsActions->setStyleSheet(ACTIONS_STYLE);
-    m_obsActions->setCursor(Qt::PointingHandCursor);
-    m_obsActions->setFocusPolicy(Qt::NoFocus);
-    auto* actionsMenu = new QMenu(m_obsActions);
-    actionsMenu->addAction(ui->actionEditInstance);
-    actionsMenu->addAction(ui->actionChangeInstGroup);
-    actionsMenu->addAction(ui->actionViewSelectedInstFolder);
-    actionsMenu->addAction(ui->actionExportInstance);
-    actionsMenu->addAction(ui->actionCopyInstance);
-    actionsMenu->addAction(ui->actionDeleteInstance);
-    actionsMenu->addAction(ui->actionCreateInstanceShortcut);
-    actionsMenu->addAction(ui->actionChangeSkin);
-    m_obsActions->setMenu(actionsMenu);
-    topBar->addWidget(m_obsActions);
-    instancesLayout->addLayout(topBar);
-
+    instancesLayout->setContentsMargins(6, 6, 6, 6);
+    instancesLayout->setSpacing(0);
     view->setParent(instancesPage);
-    view->setAutoFillBackground(false);
-    view->viewport()->setAutoFillBackground(false);
-    {
-        QPalette pal = view->palette();
-        pal.setColor(QPalette::Base, Qt::transparent);
-        pal.setColor(QPalette::Window, Qt::transparent);
-        pal.setColor(QPalette::Text, QColor(233, 221, 201));
-        pal.setColor(QPalette::WindowText, QColor(233, 221, 201));
-        pal.setColor(QPalette::Highlight, QColor(124, 52, 170));
-        pal.setColor(QPalette::HighlightedText, Qt::white);
-        view->setPalette(pal);
-    }
-    instancesLayout->addWidget(view, 1);
+    view->hide();
+
+    m_obsList = new ObsidiumInstanceList(instancesPage);
+    m_obsList->setSource(proxymodel, view->selectionModel());
+    m_obsList->setStyleSheet(QStringLiteral("QLineEdit { color: #e9ddc9; background: #1a0e22; border: 2px solid #d678ff; "
+                                            "selection-background-color: #7c34aa; }"));
+    m_obsList->installEventFilter(this);  // Delete, F2, F5 as in the classic view
+    connect(m_obsList, &ObsidiumInstanceList::instanceActivated, this, &MainWindow::instanceActivated);
+    connect(m_obsList, &ObsidiumInstanceList::droppedURLs, this, &MainWindow::processURLs, Qt::QueuedConnection);
+    // the gear (or a right click): the selected instance's actions
+    m_obsActionsMenu = new QMenu(this);
+    m_obsActionsMenu->addAction(ui->actionRenameInstance);
+    m_obsActionsMenu->addAction(ui->actionChangeInstIcon);
+    m_obsActionsMenu->addSeparator();
+    m_obsActionsMenu->addAction(ui->actionEditInstance);
+    m_obsActionsMenu->addAction(ui->actionChangeInstGroup);
+    m_obsActionsMenu->addAction(ui->actionViewSelectedInstFolder);
+    m_obsActionsMenu->addAction(ui->actionExportInstance);
+    m_obsActionsMenu->addAction(ui->actionCopyInstance);
+    m_obsActionsMenu->addAction(ui->actionCreateInstanceShortcut);
+    m_obsActionsMenu->addAction(ui->actionChangeSkin);
+    m_obsActionsMenu->addSeparator();
+    m_obsActionsMenu->addAction(ui->actionDeleteInstance);
+    connect(m_obsList, &ObsidiumInstanceList::actionsRequested, this, [this](const QPoint& globalPos) { m_obsActionsMenu->popup(globalPos); });
+    // a group's gear (or a right click on it): rename or ungroup it
+    connect(m_obsList, &ObsidiumInstanceList::groupActionsRequested, this, [this](const QString& group, const QPoint& globalPos) {
+        auto* menu = new QMenu(this);
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        menu->addAction(tr("Переименовать группу"), this, [this, group] {
+            const QString name = QInputDialog::getText(this, tr("Переименовать группу"), tr("Новое название группы:"), QLineEdit::Normal, group)
+                                     .simplified();
+            if (name.isEmpty() || name == group)
+                return;
+            if (APPLICATION->instances()->getGroups().contains(name, Qt::CaseInsensitive) && name.toLower() != group.toLower()) {
+                ObsidiumDialog::confirm(this, tr("Переименовать группу"), tr("Группа «%1» уже есть.").arg(name), tr("Понятно"), QString());
+                return;
+            }
+            // the group keeps its place in the list under its new name
+            QStringList order = APPLICATION->settings()->get("ObsidiumListOrder").toStringList();
+            order.replaceInStrings(QRegularExpression(QStringLiteral("^%1$").arg(QRegularExpression::escape(ObsidiumInstanceTree::groupKey(group)))),
+                                   ObsidiumInstanceTree::groupKey(name));
+            APPLICATION->settings()->set("ObsidiumListOrder", order);
+            APPLICATION->instances()->renameGroup(group, name);
+        });
+        menu->addAction(tr("Удалить группу"), this, [this, group] {
+            if (ObsidiumDialog::confirm(this, tr("Удалить группу?"),
+                                        tr("Группа «%1» исчезнет, а её сборки останутся в списке без группы.").arg(group), tr("Удалить"),
+                                        tr("Отмена")))
+                APPLICATION->instances()->deleteGroup(group);
+        });
+        menu->popup(globalPos);
+    });
+    instancesLayout->addWidget(m_obsList, 1);
     m_obsPages->addWidget(instancesPage);
 
     m_obsNews = new QTextBrowser();
@@ -223,6 +249,7 @@ void MainWindow::setupObsidiumWindow()
     // the instance played last time is chosen again, so that "Играть" is all it takes
     const QString last = APPLICATION->settings()->get("LastLaunchedInstance").toString();
     if (!last.isEmpty() && !InstanceProxyModel::isDeveloperInstance(last) && APPLICATION->instances()->getInstanceById(last)) {
+        m_obsLastUserInstance = last;  // the tab opens with it chosen
         showObsidiumPage(1);
         // (the page may have chosen it already: selecting it twice would reload it twice)
         if (!m_selectedInstance || m_selectedInstance->id() != last)
@@ -299,6 +326,9 @@ void MainWindow::showObsidiumPage(int page)
         return;
     }
     if (page == 0) {
+        // the instance chosen among the user's ones is chosen again on coming back
+        if (m_obsPages->currentIndex() == 0 && m_selectedInstance && !InstanceProxyModel::isDeveloperInstance(m_selectedInstance->id()))
+            m_obsLastUserInstance = m_selectedInstance->id();
         // the developer's modpack is chosen by itself: "Играть" starts it
         m_obsPages->setCurrentWidget(m_obsDeveloper);
         proxymodel->setFilter(InstanceProxyModel::Filter::Developer);
@@ -314,10 +344,18 @@ void MainWindow::showObsidiumPage(int page)
 
 void MainWindow::selectFirstVisibleInstance()
 {
-    const auto current = view->selectionModel()->currentIndex();
-    if (current.isValid() && m_selectedInstance)
-        return;
-    const auto first = proxymodel->index(0, 0);
+    // the user's instance chosen last time this tab was open, if it is still there
+    if (!m_obsLastUserInstance.isEmpty() && APPLICATION->instances()->getInstanceById(m_obsLastUserInstance)) {
+        if (!m_selectedInstance || m_selectedInstance->id() != m_obsLastUserInstance)
+            setSelectedInstanceById(m_obsLastUserInstance);
+        if (m_selectedInstance && m_selectedInstance->id() == m_obsLastUserInstance)
+            return;
+    }
+    // else the first one as the list shows them (its order, open groups), not whichever the model moved the
+    // choice to when the developer's modpack was filtered out; else the model's first
+    auto first = m_obsList ? m_obsList->firstInstance() : QModelIndex();
+    if (!first.isValid())
+        first = proxymodel->index(0, 0);
     if (first.isValid())
         view->selectionModel()->setCurrentIndex(first, QItemSelectionModel::ClearAndSelect);
 }
@@ -350,18 +388,13 @@ void MainWindow::updateObsidiumSkin()
 {
     if (!m_obsSkin)
         return;
-    if (!m_selectedInstance) {
-        m_obsInstanceName->clear();
-        m_obsSkin->clearSkin();
-        return;
-    }
-    m_obsInstanceName->setText(m_selectedInstance->name());
-    // The nick's skin (its own or Steve; it goes into the instance when the game starts).
+    // The nick's skin (its own or Steve; it goes into the instance when the game starts), with or without
+    // an instance chosen; without a nick, the one the chosen instance has; else "Нет профиля".
     QImage skin;
     bool slim = false;
     const auto account = APPLICATION->accounts()->defaultAccount();
     if (account ? PolytechSkins::effective(account->profileName(), skin, slim)
-                : PolytechSkins::read(PolytechSkins::instanceDir(m_selectedInstance->gameRoot()), skin, slim))
+                : m_selectedInstance && PolytechSkins::read(PolytechSkins::instanceDir(m_selectedInstance->gameRoot()), skin, slim))
         m_obsSkin->setSkin(skin, slim);
     else
         m_obsSkin->clearSkin();
@@ -396,8 +429,9 @@ void MainWindow::updateObsidiumFonts(qreal scale)
     if (!m_obsidium)
         return;
     m_obsNick->setFont(Obsidium::pixelFont(20 * scale));
-    m_obsInstanceName->setFont(Obsidium::pixelFont(17 * scale));
-    m_obsActions->setFont(Obsidium::pixelFont(14 * scale));
+    m_obsList->setScale(scale);
+    m_obsList->setFont(Obsidium::pixelFont(17 * scale));  // (the name being renamed)
+    m_obsSkin->setEmptyText(tr("Нет профиля"), Obsidium::pixelFont(26 * scale));
 }
 
 QList<MainWindow::LegacyGroup> MainWindow::legacyActionGroups()

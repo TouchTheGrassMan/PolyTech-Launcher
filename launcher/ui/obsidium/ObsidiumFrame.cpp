@@ -56,6 +56,7 @@ Theme makeCave()
     set(Slot::Skin, { 1220, 402, 284, 270 });
     set(Slot::Profile, { 1196, 704, 332, 48 });
     set(Slot::Play, { 1196, 762, 334, 110 });
+    set(Slot::Version, { 717, 60, 240, 28 });
     return t;
 }
 
@@ -83,6 +84,7 @@ Theme makeNewYear()
     set(Slot::Skin, { 1222, 402, 284, 272 });
     set(Slot::Profile, { 1198, 704, 334, 48 });
     set(Slot::Play, { 1198, 762, 334, 110 });
+    set(Slot::Version, { 717, 60, 240, 28 });
     return t;
 }
 }  // namespace
@@ -421,6 +423,36 @@ class DialogWatcher : public QObject {
 };
 
 }  // namespace
+
+// ---- ObsidiumCaption ----------------------------------------------------------------------
+
+ObsidiumCaption::ObsidiumCaption(const QString& text, qreal basePixelSize, Qt::Alignment alignment, QWidget* parent)
+    : QWidget(parent), m_text(text), m_basePx(basePixelSize), m_alignment(alignment)
+{
+    setAttribute(Qt::WA_TransparentForMouseEvents);  // the window is still dragged by it
+    setAttribute(Qt::WA_TranslucentBackground);
+    setAutoFillBackground(false);
+}
+
+void ObsidiumCaption::setScale(qreal scale)
+{
+    if (scale > 0 && !qFuzzyCompare(scale, m_scale)) {
+        m_scale = scale;
+        update();
+    }
+}
+
+void ObsidiumCaption::paintEvent(QPaintEvent*)
+{
+    QPainter p(this);
+    p.setFont(Obsidium::pixelFont(m_basePx * m_scale));
+    const int shadow = qMax(1, qRound(2 * m_scale));
+    const QRect r = rect().adjusted(0, 0, 0, -shadow);  // the text itself in the middle; its shadow sticks out
+    p.setPen(QColor(0, 0, 0, 220));
+    p.drawText(r.translated(shadow, shadow), m_alignment, m_text);
+    p.setPen(QColor(0xd9, 0xd2, 0xe6));
+    p.drawText(r, m_alignment, m_text);
+}
 
 // ---- ObsidiumFrame ------------------------------------------------------------------------
 

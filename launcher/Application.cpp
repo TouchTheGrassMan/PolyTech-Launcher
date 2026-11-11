@@ -830,6 +830,8 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         // Obsidium: the window's size against its picture (1.0 = 1570x1002)
         m_settings->registerSetting("ObsidiumScale", 0.75);
         m_settings->registerSetting("ObsidiumTheme", QString());
+        // the order of the instances and groups dragged in the Obsidium list (instance ids, "group/<name>")
+        m_settings->registerSetting("ObsidiumListOrder", QStringList());
 
         m_settings->registerSetting("ConsoleWindowState", "");
         m_settings->registerSetting("ConsoleWindowGeometry", "");

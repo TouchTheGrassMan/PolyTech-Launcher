@@ -6,6 +6,7 @@
 #include <QVector>
 #include <QVector3D>
 #include <QElapsedTimer>
+#include <QFont>
 #include <QTimer>
 #include <QWidget>
 
@@ -34,6 +35,15 @@ class SkinPreview3D : public QWidget {
         update();
     }
 
+    /// What it says without a skin ("Нет скина"), and in which font: a larger one shrinks to fit the width.
+    void setEmptyText(const QString& text, const QFont& font)
+    {
+        m_emptyText = text;
+        m_emptyFont = font;
+        m_customEmpty = true;
+        update();
+    }
+
     QSize sizeHint() const override;
 
    protected:
@@ -54,6 +64,9 @@ class SkinPreview3D : public QWidget {
     void rebuildBoxes();
 
     QColor m_background = QColor(32, 34, 40);
+    QString m_emptyText;
+    QFont m_emptyFont;
+    bool m_customEmpty = false;
     QImage m_skin;
     bool m_slim = false;
     QVector<Box> m_boxes;

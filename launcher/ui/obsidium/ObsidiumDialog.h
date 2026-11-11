@@ -75,6 +75,7 @@ class ObsidiumDialog : public QDialog {
 
     void setTitle(const QString& title);
     /// A question in the launcher's look; true for `yes`.
+    /// (An empty `no`: a message with the one button `yes`.)
     static bool confirm(QWidget* parent, const QString& title, const QString& text, const QString& yes, const QString& no);
     /// Where the content goes, under the title.
     QVBoxLayout* body() const { return m_body; }
