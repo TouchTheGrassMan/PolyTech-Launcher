@@ -21,7 +21,9 @@
  */
 
 #include "PrismExternalUpdater.h"
+#include "ui/obsidium/ObsidiumFrame.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
 #include <QMessageBox>
@@ -362,11 +364,37 @@ void PrismExternalUpdater::performUpdate(const QString& versionTag) const
         args.append("--pre-release");
     }
 
+    // Obsidium: the launcher closes now, and the updater shows its window (darkened, where it was) behind
+    // its own windows, which appear in the middle of it as the launcher's dialogs do
+    ObsidiumFrame* shownFrame = nullptr;
+    for (auto* window : QApplication::topLevelWidgets()) {
+        auto* frame = window->findChild<ObsidiumFrame*>();
+        if (!frame || !window->isVisible() || window->isMinimized())
+            continue;
+        const QString picture =
+            QDir(QDir::tempPath()).absoluteFilePath(QStringLiteral("obsidium-update-backdrop-%1.png").arg(QCoreApplication::applicationPid()));
+        if (frame->dimmedSnapshot().save(picture, "PNG")) {
+            const QRect where = window->frameGeometry();
+            args << "--backdrop" << picture << "--backdrop-rect"
+                 << QStringLiteral("%1,%2,%3,%4").arg(where.x()).arg(where.y()).arg(where.width()).arg(where.height());
+            shownFrame = frame;
+        }
+        break;
+    }
+
     proc.setProgram(priv->appDir.absoluteFilePath(exeName));
     proc.setArguments(args);
     auto result = proc.startDetached();
     if (!result) {
         qDebug() << "Failed to start updater:" << proc.error() << proc.errorString();
+    }
+    if (result && shownFrame) {
+        // the window stays, darkened as in the picture and closed to the mouse, until the updater has shown
+        // that picture in its place: no moment without a window between the two
+        shownFrame->setDimmed(true);
+        shownFrame->window()->setEnabled(false);
+        QTimer::singleShot(1500, qApp, [] { QCoreApplication::exit(); });
+        return;
     }
     QCoreApplication::exit();
 }

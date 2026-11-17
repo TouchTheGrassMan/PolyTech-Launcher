@@ -24,6 +24,11 @@
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QTextBrowser>
+#include <QTextDocument>
+#include <QTextCursor>
+#include <QTextBlock>
+#include <QScrollBar>
+#include <QLocale>
 #include <QVBoxLayout>
 
 #include "Application.h"
@@ -52,6 +57,127 @@ const char* PANEL_STYLE =
     "QScrollBar::add-line, QScrollBar::sub-line { height: 0; }"
     "QScrollBar::add-page, QScrollBar::sub-page { background: none; }";
 
+}  // namespace
+
+namespace {
+namespace ObsidiumNews {
+
+/// A title or a date as plain text in Markdown (its signs are not formatting).
+QString escape(const QString& text)
+{
+    QString out;
+    for (const QChar c : text) {
+        if (QStringLiteral("\\`*_{}[]<>()#+-.!|~").contains(c))
+            out += QLatin1Char('\\');
+        out += c;
+    }
+    return out;
+}
+
+/// An entry's text as Markdown: written in Markdown in the feed, its lines indented together with the XML around
+/// them (the common indent goes); an old entry written in HTML is converted.
+QString markdownOf(const QString& content)
+{
+    static const QRegularExpression s_html(QStringLiteral("<(p|br|b|i|a|ul|ol|li|h[1-6]|div|span|strong|em)[\\s>/]"),
+                                           QRegularExpression::CaseInsensitiveOption);
+    if (s_html.match(content).hasMatch()) {
+        QTextDocument html;
+        html.setHtml(content);
+        return html.toMarkdown(QTextDocument::MarkdownDialectGitHub).trimmed();
+    }
+    QString text = content;
+    text.replace(QStringLiteral("\r\n"), QStringLiteral("\n")).replace(QLatin1Char('\t'), QStringLiteral("    "));
+    QStringList lines = text.split(QLatin1Char('\n'));
+    while (!lines.isEmpty() && lines.first().trimmed().isEmpty())
+        lines.removeFirst();
+    while (!lines.isEmpty() && lines.last().trimmed().isEmpty())
+        lines.removeLast();
+    int indent = -1;
+    for (const auto& line : lines) {
+        if (line.trimmed().isEmpty())
+            continue;
+        int spaces = 0;
+        while (spaces < line.size() && line[spaces] == QLatin1Char(' '))
+            spaces++;
+        indent = indent < 0 ? spaces : qMin(indent, spaces);
+    }
+    for (auto& line : lines)
+        line = line.mid(qMin(qMax(indent, 0), int(line.size())));
+    return lines.join(QLatin1Char('\n'));
+}
+
+/// The launcher's look for the rendered Markdown: its pixel font everywhere, headings larger and violet,
+/// links violet, the dates under the titles small and grey, code on a dark ground.
+void style(QTextDocument* doc, qreal scale, const QStringList& dates)
+{
+    const QString family = Obsidium::pixelFont(10).family();
+    const qreal base = 15 * scale;
+    const QColor heading(222, 190, 255);
+    const QColor dim(176, 160, 190);
+    QTextCursor cursor(doc);
+    cursor.beginEditBlock();
+    int previousLevel = 0;
+    for (QTextBlock block = doc->begin(); block.isValid(); block = block.next()) {
+        const int level = block.blockFormat().headingLevel();
+        const bool isDate = level == 0 && previousLevel == 1 && dates.contains(block.text());
+        const bool isQuote = block.blockFormat().intProperty(QTextFormat::BlockQuoteLevel) > 0;
+        qreal px = base;
+        if (level == 1)
+            px = base * 1.45;
+        else if (level == 2)
+            px = base * 1.25;
+        else if (level >= 3)
+            px = base * 1.1;
+        else if (isDate)
+            px = base * 0.8;
+
+        QTextBlockFormat blockFormat = block.blockFormat();
+        if (level > 0) {
+            blockFormat.setTopMargin(block.blockNumber() == 0 ? 0 : px * 0.6);
+            blockFormat.setBottomMargin(px * 0.35);
+        } else {
+            blockFormat.setBottomMargin(isDate ? base * 0.6 : base * 0.5);
+        }
+        if (isQuote) {
+            // a quote: set off to the right on a faint violet ground
+            blockFormat.setLeftMargin(base * 1.2);
+            blockFormat.setBackground(QColor(214, 120, 255, 28));
+        }
+        if (blockFormat.hasProperty(QTextFormat::BlockTrailingHorizontalRulerWidth))
+            blockFormat.setProperty(QTextFormat::BackgroundBrush, QBrush(QColor(110, 70, 140)));  // the rule's colour
+        cursor.setPosition(block.position());
+        cursor.setBlockFormat(blockFormat);
+
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            if (!fragment.isValid())
+                continue;
+            QTextCharFormat format = fragment.charFormat();
+            format.setFontFamilies({ family });
+            format.clearProperty(QTextFormat::FontPointSize);
+            format.clearProperty(QTextFormat::FontSizeAdjustment);
+            format.setProperty(QTextFormat::FontPixelSize, qMax(1, qRound(px)));
+            format.setFontStyleStrategy(QFont::NoAntialias);
+            if (format.isAnchor()) {
+                format.setForeground(Obsidium::ACCENT_COLOR);
+                format.setFontUnderline(true);
+            } else if (level > 0) {
+                format.setForeground(heading);
+            } else if (isDate || isQuote) {
+                format.setForeground(dim);
+            }
+            if (format.fontFixedPitch())
+                format.setBackground(QColor(0, 0, 0, 110));
+            cursor.setPosition(fragment.position());
+            cursor.setPosition(fragment.position() + fragment.length(), QTextCursor::KeepAnchor);
+            cursor.setCharFormat(format);
+        }
+        previousLevel = level;
+    }
+    cursor.endEditBlock();
+}
+
+}  // namespace ObsidiumNews
 }  // namespace
 
 void MainWindow::setupObsidiumWindow()
@@ -239,6 +365,8 @@ void MainWindow::setupObsidiumWindow()
     // nothing to play with until there is a nick (see updateObsidiumAccount)
     connect(ui->actionLaunchInstance, &QAction::changed, this, &MainWindow::updateObsidiumAccount);
     connect(APPLICATION->accounts(), &AccountList::listChanged, this, &MainWindow::updateObsidiumAccount);
+    // (the chosen instance renamed: its name under "Играть")
+    connect(proxymodel, &QAbstractItemModel::dataChanged, this, [this] { updateObsidiumAccount(); });
 
     connect(m_obsidium, &ObsidiumFrame::scaleChanged, this, &MainWindow::updateObsidiumFonts);
 
@@ -371,6 +499,8 @@ void MainWindow::updateObsidiumAccount()
         m_obsPlay->setDanger(running);
         m_obsPlay->setEnabled(running || (!noNicks && ui->actionLaunchInstance->isEnabled()));
         m_obsPlay->setToolTip(noNicks && !running ? tr("Сначала добавьте ник в настройках профиля") : QString());
+        // under the caption: the instance it starts (or stops)
+        m_obsPlay->setSubtitle(m_selectedInstance ? m_selectedInstance->name() : QString());
     }
     if (m_obsProfile)
         m_obsProfile->setAttention(noNicks);
@@ -404,24 +534,44 @@ void MainWindow::updateObsidiumNews()
 {
     if (!m_obsNews)
         return;
+    // The news as one Markdown text: each entry's title (a heading), its date, its text (Markdown) and its link.
+    m_obsNewsDates.clear();
+    QString markdown;
     if (m_newsChecker->isLoadingNews()) {
-        m_obsNews->setHtml(QStringLiteral("<p>%1</p>").arg(tr("Загрузка новостей...")));
+        markdown = tr("Загрузка новостей...");
+    } else if (m_newsChecker->getNewsEntries().isEmpty()) {
+        markdown = tr("Новостей пока нет.");
+    } else {
+        bool first = true;
+        for (const auto& entry : m_newsChecker->getNewsEntries()) {
+            if (!first)
+                markdown += QStringLiteral("\n\n---\n\n");
+            first = false;
+            markdown += QStringLiteral("# ") + ObsidiumNews::escape(entry->title.simplified()) + QStringLiteral("\n\n");
+            if (entry->updated.isValid()) {
+                const QString date = QLocale().toString(entry->updated.toLocalTime().date(), QStringLiteral("d MMMM yyyy"));
+                m_obsNewsDates.append(date);
+                markdown += ObsidiumNews::escape(date) + QStringLiteral("\n\n");
+            }
+            markdown += ObsidiumNews::markdownOf(entry->content);
+            if (!entry->link.isEmpty())
+                markdown += QStringLiteral("\n\n[%1](%2)").arg(tr("Подробнее"), entry->link);
+        }
+    }
+    m_obsNewsMarkdown = markdown;
+    renderObsidiumNews();
+}
+
+void MainWindow::renderObsidiumNews()
+{
+    if (!m_obsNews)
         return;
-    }
-    const auto entries = m_newsChecker->getNewsEntries();
-    if (entries.isEmpty()) {
-        m_obsNews->setHtml(QStringLiteral("<p>%1</p>").arg(tr("Новостей пока нет.")));
-        return;
-    }
-    QString html;
-    for (const auto& entry : entries) {
-        html += QStringLiteral("<h3 style=\"color:#d678ff\">%1</h3>").arg(entry->title.toHtmlEscaped());
-        html += entry->content;
-        if (!entry->link.isEmpty())
-            html += QStringLiteral("<p><a style=\"color:#d678ff\" href=\"%1\">%2</a></p>").arg(entry->link.toHtmlEscaped(), tr("Подробнее"));
-        html += QStringLiteral("<hr>");
-    }
-    m_obsNews->setHtml(html);
+    const int scroll = m_obsNews->verticalScrollBar()->value();
+    m_obsNews->document()->setMarkdown(m_obsNewsMarkdown, QTextDocument::MarkdownDialectGitHub);
+    const qreal scale = m_obsidium ? m_obsidium->scale() : 1.0;
+    m_obsNews->document()->setDocumentMargin(10 * scale);
+    ObsidiumNews::style(m_obsNews->document(), scale, m_obsNewsDates);
+    m_obsNews->verticalScrollBar()->setValue(scroll);
 }
 
 void MainWindow::updateObsidiumFonts(qreal scale)
@@ -432,6 +582,7 @@ void MainWindow::updateObsidiumFonts(qreal scale)
     m_obsList->setScale(scale);
     m_obsList->setFont(Obsidium::pixelFont(17 * scale));  // (the name being renamed)
     m_obsSkin->setEmptyText(tr("Нет профиля"), Obsidium::pixelFont(26 * scale));
+    renderObsidiumNews();  // (its fonts are in pixels too)
 }
 
 QList<MainWindow::LegacyGroup> MainWindow::legacyActionGroups()

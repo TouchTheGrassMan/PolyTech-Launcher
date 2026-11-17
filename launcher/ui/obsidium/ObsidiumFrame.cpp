@@ -11,10 +11,32 @@
 #include <QScreen>
 #include <QPointer>
 #include <QSet>
+#include <QTimer>
 #include <QVariantAnimation>
 #include <QWindow>
 
+namespace {
+/// How dark what lies under a dialog gets (the launcher's window, a dialog under another): 0..1.
+constexpr qreal DIM_LEVEL = 0.675;
+}  // namespace
+
 namespace Obsidium {
+
+void centerWindowOn(QWidget* window, const QRect& area)
+{
+    QMargins frame;
+    if (auto* handle = window->windowHandle())
+        frame = handle->frameMargins();
+    const QSize outer = window->size().grownBy(frame);
+    QPoint topLeft(area.x() + (area.width() - outer.width()) / 2, area.y() + (area.height() - outer.height()) / 2);
+    const QPoint middle = area.center();
+    if (auto* screen = QGuiApplication::screenAt(middle)) {
+        const QRect free = screen->availableGeometry();
+        topLeft.setX(qBound(free.left(), topLeft.x(), qMax(free.left(), free.right() + 1 - outer.width())));
+        topLeft.setY(qBound(free.top(), topLeft.y(), qMax(free.top(), free.bottom() + 1 - outer.height())));
+    }
+    window->move(topLeft);  // (a window's position is that of its frame)
+}
 
 QFont pixelFont(qreal pixelSize)
 {
@@ -116,6 +138,14 @@ ObsidiumButton::ObsidiumButton(const QString& text, Style style, QWidget* parent
     setAttribute(Qt::WA_Hover);
     if (style == Style::Tab)
         setCheckable(true);
+}
+
+void ObsidiumButton::setSubtitle(const QString& subtitle)
+{
+    if (subtitle == m_subtitle)
+        return;
+    m_subtitle = subtitle;
+    update();
 }
 
 void ObsidiumButton::setScale(qreal scale)
@@ -225,11 +255,33 @@ void ObsidiumButton::paintEvent(QPaintEvent*)
         font.setPixelSize(qMax(1, font.pixelSize() - 1));
     p.setFont(font);
     const QPointF offset = down ? QPointF(0, 1.5 * m_scale) : QPointF();
-    const QRectF textRect = textArea.translated(offset);
+    QRectF textRect = textArea.translated(offset);
+    // with a second line the caption moves up and the line goes under it
+    QRectF subtitleRect;
+    QFont subtitleFont;
+    QString subtitle;
+    if (!m_subtitle.isEmpty()) {
+        subtitleFont = Obsidium::pixelFont(qMax<qreal>(m_basePx * 0.36, 10) * m_scale);
+        const QFontMetricsF subtitleMetrics(subtitleFont);
+        subtitle = subtitleMetrics.elidedText(m_subtitle, Qt::ElideRight, textArea.width());
+        const qreal mainHeight = QFontMetricsF(font).height();
+        const qreal gap = 7 * m_scale;
+        const qreal top = textRect.center().y() - (mainHeight * 0.82 + gap + subtitleMetrics.height()) / 2;
+        textRect = QRectF(textRect.left(), top, textRect.width(), mainHeight * 0.82);
+        subtitleRect = QRectF(textRect.left(), textRect.bottom() + gap, textRect.width(), subtitleMetrics.height());
+    }
     // a hard pixel shadow, as in the game
     const qreal shadow = qMax<qreal>(1.0, 2 * m_scale);
     p.setPen(QColor(20, 12, 24, isEnabled() ? 220 : 120));
     p.drawText(textRect.translated(shadow, shadow), Qt::AlignCenter, text());
+    if (!subtitle.isEmpty()) {
+        p.setFont(subtitleFont);
+        const qreal smallShadow = qMax<qreal>(1.0, 1.5 * m_scale);
+        p.drawText(subtitleRect.translated(smallShadow, smallShadow), Qt::AlignCenter, subtitle);
+        p.setPen(!isEnabled() ? QColor(130, 122, 118) : QColor(238, 222, 255));
+        p.drawText(subtitleRect, Qt::AlignCenter, subtitle);
+        p.setFont(font);
+    }
 
     QColor color = Obsidium::TEXT_COLOR;
     if (!isEnabled())
@@ -389,7 +441,14 @@ class DialogWatcher : public QObject {
         if ((type != QEvent::Show && type != QEvent::Hide) || !watched->isWidgetType())
             return false;
         auto* widget = static_cast<QWidget*>(watched);
-        if (!widget->isWindow() || widget == m_main || (widget->windowType() != Qt::Dialog && widget->windowType() != Qt::Sheet))
+        if (!widget->isWindow() || widget == m_main)
+            return false;
+        // every window opened over the launcher shows in the middle of it, not of the screen
+        // (and not where it was last time); a window brought back by the system stays where it is
+        const auto kind = widget->windowType();
+        if (type == QEvent::Show && !event->spontaneous() && (kind == Qt::Window || kind == Qt::Dialog || kind == Qt::Sheet))
+            center(widget);
+        if (kind != Qt::Dialog && kind != Qt::Sheet)
             return false;
         if (type == QEvent::Show) {
             if (!m_open.contains(widget)) {
@@ -409,12 +468,26 @@ class DialogWatcher : public QObject {
     }
 
    private:
+    void center(QWidget* window)
+    {
+        if (!m_main->isVisible() || m_main->isMinimized())
+            return;
+        Obsidium::centerWindowOn(window, m_main->frameGeometry());
+        // a window that sizes itself as it is shown is put in the middle again with its real size
+        const QPointer<QWidget> guard(window);
+        const QSize size = window->size();
+        QTimer::singleShot(0, this, [this, guard, size] {
+            if (guard && guard->isVisible() && guard->size() != size && m_main->isVisible())
+                Obsidium::centerWindowOn(guard, m_main->frameGeometry());
+        });
+    }
+
     void refresh()
     {
         m_frame->setDimmed(!m_open.isEmpty());
         // the newest window stays bright, the ones it covers get darker
         for (int i = 0; i < m_open.size(); i++)
-            WindowDim::of(m_open[i])->fadeTo(i + 1 < m_open.size() ? 0.45 : 0.0);
+            WindowDim::of(m_open[i])->fadeTo(i + 1 < m_open.size() ? DIM_LEVEL : 0.0);
     }
 
     ObsidiumFrame* m_frame;
@@ -517,7 +590,24 @@ void ObsidiumFrame::setDimmed(bool dimmed)
         overlay->setGeometry(rect());
         m_dim = overlay;
     }
-    static_cast<DimOverlay*>(m_dim)->fadeTo(dimmed ? 0.45 : 0.0);
+    static_cast<DimOverlay*>(m_dim)->fadeTo(dimmed ? DIM_LEVEL : 0.0);
+}
+
+QImage ObsidiumFrame::dimmedSnapshot()
+{
+    // the window without its own darkening (it may be fading out as the last dialog closes)...
+    const bool dimShown = m_dim && m_dim->isVisible();
+    if (dimShown)
+        m_dim->hide();
+    QImage shot = window()->grab().toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    if (dimShown)
+        m_dim->show();
+    // ...darkened as under a dialog, the transparent corners kept transparent
+    QPainter p(&shot);
+    p.setCompositionMode(QPainter::CompositionMode_SourceAtop);
+    p.fillRect(QRect(QPoint(0, 0), shot.size()), QColor(0, 0, 0, qRound(DIM_LEVEL * 255)));
+    p.end();
+    return shot;
 }
 
 void ObsidiumFrame::dimForDialogs(QWidget* mainWindow)

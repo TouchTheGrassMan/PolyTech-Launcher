@@ -55,5 +55,6 @@ bool NewsEntry::fromXmlElement(const QDomElement& element, NewsEntry* entry, [[m
     entry->title = title;
     entry->content = content;
     entry->link = link;
+    entry->updated = QDateTime::fromString(childValue(element, "updated").trimmed(), Qt::ISODate);
     return true;
 }

@@ -38,6 +38,7 @@ struct GitHubReleaseAsset {
     QDateTime created_at;
     QDateTime updated_at;
     QString browser_download_url;
+    QString state;  // "uploaded" once the file is all there ("starter" while it is being uploaded)
 
     bool isValid() { return id > 0; }
 };

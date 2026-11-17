@@ -131,12 +131,9 @@ void paintWindowFrame(QPainter& p, const QRect& rect)
     QPainterPath path;
     path.addRoundedRect(r, 10, 10);
     p.fillPath(path, WINDOW_BG);
-    p.setPen(QPen(BRONZE, 3));
+    // one bright violet border (the fields and buttons inside keep their bronze)
+    p.setPen(QPen(QColor(226, 140, 255, 235), 2.5));
     p.drawPath(path);
-    QPainterPath inner;
-    inner.addRoundedRect(r.adjusted(4, 4, -4, -4), 7, 7);
-    p.setPen(QPen(QColor(214, 120, 255, 110), 2));
-    p.drawPath(inner);
     p.restore();
 }
 

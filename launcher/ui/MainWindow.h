@@ -248,6 +248,7 @@ class MainWindow : public QMainWindow {
     void updateObsidiumAccount();
     void updateObsidiumSkin();
     void updateObsidiumNews();
+    void renderObsidiumNews();
     void updateObsidiumFonts(qreal scale);
 
     void addInstance(const QString& url = QString(), const QMap<QString, QString>& extra_info = {});
@@ -289,7 +290,9 @@ class MainWindow : public QMainWindow {
     QStackedWidget* m_obsPages = nullptr;
     ObsidiumInstanceList* m_obsList = nullptr;
     QMenu* m_obsActionsMenu = nullptr;
-    QString m_obsLastUserInstance;  // the user's instance chosen when the tab was left
+    QString m_obsLastUserInstance;
+    QString m_obsNewsMarkdown;     // the news as one Markdown text
+    QStringList m_obsNewsDates;    // the dates under their titles, styled apart  // the user's instance chosen when the tab was left
     QTextBrowser* m_obsNews = nullptr;
     QLabel* m_obsNick = nullptr;
     SkinPreview3D* m_obsSkin = nullptr;

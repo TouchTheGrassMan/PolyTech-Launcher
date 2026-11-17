@@ -1752,6 +1752,7 @@ void MainWindow::selectionBad()
     renameButton->setText(tr("Rename Instance"));
     updateInstanceToolIcon("grass");
     updateObsidiumSkin();
+    updateObsidiumAccount();
 
     // ...and then see if we can enable the previously selected instance
     setSelectedInstanceById(APPLICATION->settings()->get("SelectedInstance").toString());

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <QDateTime>
 #include <QDomElement>
 #include <QObject>
 #include <QString>
@@ -49,6 +50,9 @@ class NewsEntry : public QObject {
 
     //! URL to the post.
     QString link;
+
+    //! When it was posted or last changed (<updated>); invalid when the feed doesn't say.
+    QDateTime updated;
 };
 
 using NewsEntryPtr = std::shared_ptr<NewsEntry>;

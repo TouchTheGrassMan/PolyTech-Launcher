@@ -31,6 +31,7 @@
 
 #include <QAccessible>
 #include <QCommandLineParser>
+#include <QFile>
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QNetworkProxy>
@@ -56,6 +57,87 @@ namespace fs = std::filesystem;
 #include "net/RawHeaderProxy.h"
 
 #include "MMCZip.h"
+
+#include <QMouseEvent>
+#include <QPainter>
+#include <QWindow>
+#include <QTimer>
+#include <QPointer>
+
+#include "ui/obsidium/ObsidiumFrame.h"
+
+namespace {
+
+/// Obsidium: the launcher's window as it looked when it closed for the update, darkened as under a
+/// dialog, where it was: the updater's windows show over it and in its middle, as if the launcher
+/// had opened them. It goes when the updater does.
+class UpdateBackdrop : public QWidget {
+   public:
+    UpdateBackdrop(const QImage& picture, const QRect& rect) : m_picture(picture)
+    {
+        setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+        setAttribute(Qt::WA_TranslucentBackground);
+        setAttribute(Qt::WA_ShowWithoutActivating);
+        setWindowTitle(BuildConfig.LAUNCHER_DISPLAYNAME);
+        setGeometry(rect);
+    }
+
+   protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        p.drawImage(rect(), m_picture);
+    }
+
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        // a click on it brings the updater's window back to the front
+        if (auto* window = QApplication::activeModalWidget()) {
+            window->raise();
+            window->activateWindow();
+        }
+        event->accept();
+    }
+
+   private:
+    QImage m_picture;
+};
+
+/// Every window of the updater: in the middle of the backdrop, and in front of it.
+class CenterOnBackdrop : public QObject {
+   public:
+    explicit CenterOnBackdrop(QWidget* backdrop) : QObject(backdrop), m_backdrop(backdrop) {}
+
+   protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() != QEvent::Show || event->spontaneous() || !watched->isWidgetType())
+            return false;
+        auto* window = static_cast<QWidget*>(watched);
+        if (!window->isWindow() || window == m_backdrop || !m_backdrop->isVisible())
+            return false;
+        const auto kind = window->windowType();
+        if (kind != Qt::Window && kind != Qt::Dialog && kind != Qt::Sheet)
+            return false;
+        if (!window->parentWidget() && window->windowHandle() && m_backdrop->windowHandle())
+            window->windowHandle()->setTransientParent(m_backdrop->windowHandle());
+        Obsidium::centerWindowOn(window, m_backdrop->frameGeometry());
+        // a window that sizes itself as it is shown (a message box) is put in the middle again with its real size
+        const QPointer<QWidget> guard(window);
+        const QSize size = window->size();
+        QTimer::singleShot(0, this, [this, guard, size] {
+            if (guard && guard->isVisible() && guard->size() != size)
+                Obsidium::centerWindowOn(guard, m_backdrop->frameGeometry());
+        });
+        return false;
+    }
+
+   private:
+    QWidget* m_backdrop;
+};
+
+}  // namespace
 
 /** output to the log file */
 void appDebugOutput(QtMsgType type, const QMessageLogContext& context, const QString& msg)
@@ -100,7 +182,9 @@ PrismUpdaterApp::PrismUpdaterApp(int& argc, char** argv) : QApplication(argc, ar
           { { "l", "list" }, tr("List available releases.") },
           { "debug", tr("Log debug to console.") },
           { { "S", "select-ui" }, tr("Select the version to install with a GUI.") },
-          { { "D", "allow-downgrade" }, tr("Allow the updater to downgrade to previous versions.") } });
+          { { "D", "allow-downgrade" }, tr("Allow the updater to downgrade to previous versions.") },
+          { "backdrop", tr("A picture of the launcher's window, shown behind the updater's windows."), tr("png file") },
+          { "backdrop-rect", tr("Where the launcher's window was: x,y,width,height."), tr("rectangle") } });
 
     parser.addHelpOption();
     parser.addVersionOption();
@@ -347,6 +431,9 @@ PrismUpdaterApp::PrismUpdaterApp(int& argc, char** argv) : QApplication(argc, ar
 
     m_allowPreRelease = parser.isSet("pre-release");
 
+    if (!m_checkOnly && parser.isSet("backdrop"))
+        showBackdrop(parser.value("backdrop"), parser.value("backdrop-rect"));
+
     auto marker_file_path = QDir(m_rootPath).absoluteFilePath(".prism_launcher_updater_unpack.marker");
     auto marker_file = QFileInfo(marker_file_path);
     if (marker_file.exists()) {
@@ -363,9 +450,28 @@ PrismUpdaterApp::PrismUpdaterApp(int& argc, char** argv) : QApplication(argc, ar
     }
 }
 
+void PrismUpdaterApp::showBackdrop(const QString& picturePath, const QString& rect)
+{
+    const QImage picture(picturePath);
+    QFile::remove(picturePath);  // (a temporary file the launcher wrote for this)
+    const QStringList parts = rect.split(',');
+    if (picture.isNull() || parts.size() != 4) {
+        qWarning() << "No backdrop:" << picturePath << rect;
+        return;
+    }
+    const QRect where(parts[0].toInt(), parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
+    if (where.width() <= 0 || where.height() <= 0)
+        return;
+    auto* backdrop = new UpdateBackdrop(picture, where);
+    installEventFilter(new CenterOnBackdrop(backdrop));
+    backdrop->show();
+    m_backdrop = backdrop;
+}
+
 PrismUpdaterApp::~PrismUpdaterApp()
 {
     qDebug() << "updater shutting down";
+    delete m_backdrop;
     // Shut down logger by setting the logger function to nothing
     qInstallMessageHandler(nullptr);
 }
@@ -611,10 +717,21 @@ QList<GitHubRelease> PrismUpdaterApp::nonDraftReleases()
 {
     QList<GitHubRelease> nonDraft;
     for (auto rls : m_releases) {
-        if (rls.isValid() && !rls.draft)
+        if (rls.isValid() && !rls.draft && isInstallable(rls))
             nonDraft.append(rls);
     }
     return nonDraft;
+}
+
+bool PrismUpdaterApp::isInstallable(const GitHubRelease& release)
+{
+    // Obsidium: a release is published as soon as its tag is, and its files are built and uploaded after
+    // that (release.yml): until the file for this install is there, it is not offered.
+    if (validReleaseArtifacts(release).isEmpty()) {
+        qDebug() << "Release" << release.tag_name << "has no file for this install yet: not offered";
+        return false;
+    }
+    return true;
 }
 
 QList<GitHubRelease> PrismUpdaterApp::newerReleases()
@@ -660,6 +777,10 @@ QList<GitHubReleaseAsset> PrismUpdaterApp::validReleaseArtifacts(const GitHubRel
     if (BuildConfig.BUILD_ARTIFACT.isEmpty())
         qWarning() << "Build platform is not set!";
     for (auto asset : release.assets) {
+        if (!asset.state.isEmpty() && asset.state != "uploaded") {
+            qDebug() << "Rejecting" << asset.name << "because it is still being uploaded";
+            continue;
+        }
         if (asset.name.endsWith(".zsync")) {
             qDebug() << "Rejecting zsync file" << asset.name;
             continue;
@@ -1266,6 +1387,7 @@ int PrismUpdaterApp::parseReleasePage(const QByteArray* response)
                 asset.created_at = QDateTime::fromString(Json::requireString(asset_obj, "created_at"), Qt::ISODate);
                 asset.updated_at = QDateTime::fromString(Json::requireString(asset_obj, "updated_at"), Qt::ISODate);
                 asset.browser_download_url = Json::requireString(asset_obj, "browser_download_url");
+                asset.state = asset_obj["state"].toString();
                 release.assets.append(asset);
             }
             m_releases.append(release);
@@ -1286,6 +1408,8 @@ GitHubRelease PrismUpdaterApp::getLatestRelease()
         if (release.draft)
             continue;
         if (release.prerelease && !m_allowPreRelease)
+            continue;
+        if (!isInstallable(release))
             continue;
         if (!latest.isValid() || (release.version > latest.version)) {
             latest = release;

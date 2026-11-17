@@ -71,6 +71,8 @@ class PrismUpdaterApp : public QApplication {
     GitHubRelease selectRelease();
     QList<GitHubRelease> newerReleases();
     QList<GitHubRelease> nonDraftReleases();
+    /// Whether the release has the file this install updates from, uploaded in full.
+    bool isInstallable(const GitHubRelease& release);
 
     void printReleases();
 
@@ -97,6 +99,10 @@ class PrismUpdaterApp : public QApplication {
 
     void clearUpdateLog();
     void logUpdate(const QString& msg);
+    /// Obsidium: shows the launcher's window (a picture of it) behind the updater's windows, see --backdrop.
+    void showBackdrop(const QString& picturePath, const QString& rect);
+
+    QWidget* m_backdrop = nullptr;
 
     QString m_rootPath;
     QString m_dataPath;

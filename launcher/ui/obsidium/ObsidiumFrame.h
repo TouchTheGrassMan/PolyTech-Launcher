@@ -67,6 +67,10 @@ const Theme& theme(const QString& id);
 /// The font of the picture's captions ("Minecraft Rus"), loaded from the resources once.
 QFont pixelFont(qreal pixelSize);
 
+/// Moves a window (about to be shown or shown) so that it is in the middle of `area`, its frame
+/// included, and kept on the screen.
+void centerWindowOn(QWidget* window, const QRect& area);
+
 /// Light text on the dark stone of the picture.
 inline const QColor TEXT_COLOR(233, 221, 201);
 inline const QColor ACCENT_COLOR(214, 120, 255);
@@ -93,6 +97,8 @@ class ObsidiumButton : public QAbstractButton {
     void setAttention(bool attention);
     /// Red instead of purple ("Остановить" while the game runs).
     void setDanger(bool danger);
+    /// A second, small line under the caption (the instance "Играть" starts); empty for none.
+    void setSubtitle(const QString& subtitle);
 
     QSize sizeHint() const override { return { 100, 30 }; }
 
@@ -109,6 +115,7 @@ class ObsidiumButton : public QAbstractButton {
     QVariantAnimation* m_pulse = nullptr;
     qreal m_pulseLevel = 0;
     bool m_danger = false;
+    QString m_subtitle;
 };
 
 /// A line of text drawn on the picture in its font, with a hard shadow (the launcher's version).
@@ -154,8 +161,11 @@ class ObsidiumFrame : public QWidget {
 
     /// Darkens the picture while a dialog is open over it.
     void setDimmed(bool dimmed);
-    /// Dims the picture by itself whenever a dialog of the launcher is open (except `mainWindow`).
+    /// Dims the picture by itself whenever a dialog of the launcher is open (except `mainWindow`),
+    /// and shows every window opened over it in its middle.
     void dimForDialogs(QWidget* mainWindow);
+    /// The whole window as it looks now, darkened as under a dialog (transparent around the picture).
+    QImage dimmedSnapshot();
 
    signals:
     void scaleChanged(qreal scale);
