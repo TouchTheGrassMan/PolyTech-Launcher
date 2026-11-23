@@ -276,6 +276,8 @@ set(MINECRAFT_SOURCES
     minecraft/launch/EnsureAvailableMemory.h
     minecraft/launch/ApplyGraphicsPreset.cpp
     minecraft/launch/ApplyGraphicsPreset.h
+    minecraft/HardwareRating.cpp
+    minecraft/HardwareRating.h
 
     # PolyTech: Horizon, Minecraft: Java Edition rewritten in Rust
     horizon/Horizon.cpp
@@ -1280,6 +1282,7 @@ qt_add_resources(LAUNCHER_RESOURCES
     resources/shaders/shaders.qrc
     resources/default_instance/default_instance.qrc
     resources/obsidium/obsidium_ui.qrc
+    resources/hardware/hardware.qrc
     resources/translations/translations.qrc
     "${CMAKE_CURRENT_BINARY_DIR}/../${Launcher_Branding_LogoQRC}"
 )

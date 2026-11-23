@@ -1,22 +1,28 @@
 #pragma once
 
-#include <QDialog>
 #include <QString>
 #include <QVector>
 
+#include "minecraft/HardwareRating.h"
 #include "minecraft/launch/ApplyGraphicsPreset.h"
+#include "ui/obsidium/ObsidiumDialog.h"
 
 class QPushButton;
 
 /**
- * Launcher copy of the PolyTech Hub graphics chooser (GraphicsPresetPrompt):
- * same panel, cards, colours and proportions, drawn at Minecraft GUI scale 2.
+ * The graphics preset chooser of the first launch, in the launcher's look: the cards of the
+ * PolyTech Hub chooser (GraphicsPresetPrompt: same icons and texts), what this computer is and
+ * which preset suits it, and a warning when it is below the pack's minimum. The suggested preset
+ * is chosen from the start, so pressing the button right away launches with it.
  */
-class GraphicsPresetDialog : public QDialog {
+class GraphicsPresetDialog : public ObsidiumDialog {
     Q_OBJECT
 
    public:
-    GraphicsPresetDialog(const QVector<GraphicsPresetChoice>& choices, const GraphicsPromptTexts& texts, QWidget* parent = nullptr);
+    GraphicsPresetDialog(const QVector<GraphicsPresetChoice>& choices,
+                         const GraphicsPromptTexts& texts,
+                         const HardwareRating::Assessment& hardware,
+                         QWidget* parent = nullptr);
 
     QString selectedId() const { return m_selected; }
 

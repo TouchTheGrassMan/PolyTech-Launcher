@@ -59,6 +59,7 @@ int main(int argc, char* argv[])
             Q_INIT_RESOURCE(Obsidium);
             Q_INIT_RESOURCE(obsidium_ui);  // the drawn main window (resources/obsidium)
             Q_INIT_RESOURCE(translations);  // the built-in translations (resources/translations)
+            Q_INIT_RESOURCE(hardware);      // benchmark scores for the graphics preset suggestion
 
             Q_INIT_RESOURCE(pe_dark);
             Q_INIT_RESOURCE(pe_light);

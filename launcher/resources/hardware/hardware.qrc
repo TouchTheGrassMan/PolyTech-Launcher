@@ -1,0 +1,8 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <!-- Benchmark scores for the graphics preset suggestion, made by tools/hardware_tables.py -->
+    <qresource prefix="/hardware">
+        <file>gpus.tsv</file>
+        <file>cpus.tsv</file>
+    </qresource>
+</RCC>

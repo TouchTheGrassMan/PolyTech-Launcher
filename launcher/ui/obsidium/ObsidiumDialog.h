@@ -6,7 +6,9 @@
 #include <QDialog>
 #include <QPixmap>
 
+class QHBoxLayout;
 class QLabel;
+class QSpacerItem;
 class QPainter;
 class QVBoxLayout;
 
@@ -74,6 +76,8 @@ class ObsidiumDialog : public QDialog {
     explicit ObsidiumDialog(QWidget* parent = nullptr);
 
     void setTitle(const QString& title);
+    /// The title in the middle of the window instead of on the left.
+    void setTitleCentered(bool centered);
     /// A question in the launcher's look; true for `yes`.
     /// (An empty `no`: a message with the one button `yes`.)
     static bool confirm(QWidget* parent, const QString& title, const QString& text, const QString& yes, const QString& no);
@@ -86,5 +90,7 @@ class ObsidiumDialog : public QDialog {
 
    private:
     QLabel* m_title;
+    QHBoxLayout* m_titleRow;
+    QSpacerItem* m_titleLead;
     QVBoxLayout* m_body;
 };

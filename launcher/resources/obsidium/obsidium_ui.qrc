@@ -6,5 +6,6 @@
         <file>default_skin.png</file>
         <file>polytech_preview.png</file>
         <file>minecraft.ttf</file>
+        <file>preset_potato.png</file>
     </qresource>
 </RCC>

@@ -267,17 +267,19 @@ ObsidiumDialog::ObsidiumDialog(QWidget* parent) : QDialog(parent)
     m_body->setContentsMargins(18, 12, 18, 18);
     m_body->setSpacing(10);
 
-    auto* titleRow = new QHBoxLayout();
+    m_titleRow = new QHBoxLayout();
+    m_titleLead = new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+    m_titleRow->addSpacerItem(m_titleLead);
     m_title = new QLabel(this);
     m_title->setFont(Obsidium::pixelFont(18));
     m_title->setStyleSheet(QStringLiteral("color: %1;").arg(rgb(Obsidium::TEXT_COLOR)));
-    titleRow->addWidget(m_title);
-    titleRow->addStretch(1);
+    m_titleRow->addWidget(m_title);
+    m_titleRow->addStretch(1);
     auto* closeButton = new ObsidiumIconButton(ObsidiumIconButton::Icon::Close, this);
     closeButton->setToolTip(tr("Закрыть"));
     connect(closeButton, &QAbstractButton::clicked, this, &QDialog::reject);
-    titleRow->addWidget(closeButton);
-    m_body->addLayout(titleRow);
+    m_titleRow->addWidget(closeButton);
+    m_body->addLayout(m_titleRow);
 }
 
 bool ObsidiumDialog::confirm(QWidget* parent, const QString& title, const QString& text, const QString& yes, const QString& no)
@@ -310,6 +312,17 @@ bool ObsidiumDialog::confirm(QWidget* parent, const QString& title, const QStrin
     dialog.body()->addLayout(buttons);
     dialog.adjustSize();
     return dialog.exec() == QDialog::Accepted;
+}
+
+void ObsidiumDialog::setTitleCentered(bool centered)
+{
+    // the same room on the left as the close button takes on the right keeps the title in the middle
+    const int closeWidth = ObsidiumIconButton(ObsidiumIconButton::Icon::Close).sizeHint().width();
+    m_titleLead->changeSize(centered ? closeWidth : 0, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+    m_titleRow->setStretchFactor(m_title, centered ? 1 : 0);
+    m_titleRow->setStretch(2, centered ? 0 : 1);  // the stretch between the title and the close button
+    m_title->setAlignment(centered ? Qt::AlignCenter : Qt::AlignLeft | Qt::AlignVCenter);
+    m_titleRow->invalidate();
 }
 
 void ObsidiumDialog::setTitle(const QString& title)

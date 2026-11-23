@@ -7,7 +7,7 @@
 #include "launch/LaunchStep.h"
 #include "minecraft/MinecraftInstance.h"
 
-/** One card of the chooser. Texts and icon come from the PolyTech Hub mod jar. */
+/** One card of the chooser. Texts and icons come from the PolyTech Hub mod jar (the potato's from the launcher). */
 struct GraphicsPresetChoice {
     QString id;  // potato / creeper / reactor
     QString title;
@@ -51,7 +51,6 @@ class ApplyGraphicsPreset : public LaunchStep {
 
    private:
     QString findModJar() const;
-    QString findMinecraftJar() const;
     QByteArray readPresetFile(const QString& modJar, const QString& id) const;
     bool applyPreset(const QString& id, const QByteArray& presetData, QString& error);
     bool recordChoice(const QString& id);

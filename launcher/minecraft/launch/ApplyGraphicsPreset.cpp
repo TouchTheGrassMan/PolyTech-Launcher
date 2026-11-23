@@ -7,10 +7,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
+#include <QRegularExpression>
 
 #include "archive/ArchiveReader.h"
-#include "minecraft/Library.h"
-#include "minecraft/PackProfile.h"
+#include "minecraft/HardwareRating.h"
 #include "ui/dialogs/GraphicsPresetDialog.h"
 
 namespace {
@@ -18,8 +18,8 @@ namespace {
 // Mirrors GraphicsPreset.choices() in the mod: same ids, same order.
 const QStringList PRESET_IDS = { QStringLiteral("potato"), QStringLiteral("creeper"), QStringLiteral("reactor") };
 
-// The potato card uses the vanilla poisonous potato, like the mod does.
-const QString POTATO_ICON = QStringLiteral("assets/minecraft/textures/item/poisonous_potato.png");
+// The potato card has its own picture in the launcher (the mod draws the vanilla poisonous potato).
+const QString POTATO_ICON = QStringLiteral(":/obsidium/preset_potato.png");
 
 // Must match HubConfig.GRAPHICS_PROMPT_VERSION in the mod.
 const int GRAPHICS_PROMPT_VERSION = 1;
@@ -129,26 +129,6 @@ QString ApplyGraphicsPreset::findModJar() const
     return {};
 }
 
-QString ApplyGraphicsPreset::findMinecraftJar() const
-{
-    auto components = m_instance->getPackProfile();
-    if (!components)
-        return {};
-    auto profile = components->getProfile();
-    if (!profile)
-        return {};
-    auto mainJar = profile->getMainJar();
-    if (!mainJar)
-        return {};
-    QStringList jars, native, native32, native64;
-    mainJar->getApplicableFiles(m_instance->runtimeContext(), jars, native, native32, native64, m_instance->getLocalLibraryPath());
-    for (const QString& jar : jars) {
-        if (QFile::exists(jar))
-            return jar;
-    }
-    return {};
-}
-
 /** Same lookup as GraphicsSettings.load in the mod: config override first, then the jar. */
 QByteArray ApplyGraphicsPreset::readPresetFile(const QString& modJar, const QString& id) const
 {
@@ -199,26 +179,28 @@ void ApplyGraphicsPreset::executeTask()
     GraphicsPromptTexts texts;
     texts.header = text(QStringLiteral("polytechhub.graphics.header"),
                         QStringLiteral("Давайте настроим качество изображения, как бы вы оценили свой компьютер?"));
-    texts.footnote = text(QStringLiteral("polytechhub.graphics.footnote"),
-                          QStringLiteral("Вы сможете выбрать другой набор настроек графики позже в настройках, если вас не устроит результат"));
+    // the launcher's own line: the chooser here also says what suits the computer
+    texts.footnote = tr("Вы сможете выбрать другой набор графики в настройках игры позднее");
     texts.confirm = text(QStringLiteral("polytechhub.graphics.confirm"), QStringLiteral("Подтвердить выбор"));
     texts.selectFirst = text(QStringLiteral("polytechhub.graphics.select_first"), QStringLiteral("Выберите вариант"));
 
-    const QString minecraftJar = findMinecraftJar();
     QVector<GraphicsPresetChoice> choices;
     for (const QString& id : PRESET_IDS) {
         GraphicsPresetChoice choice;
         choice.id = id;
         choice.title = text(QStringLiteral("polytechhub.graphics.%1.title").arg(id), id);
         choice.description = text(QStringLiteral("polytechhub.graphics.%1.desc").arg(id), QString());
-        const QByteArray icon = id == QLatin1String("potato")
-                                    ? readFromArchive(minecraftJar, POTATO_ICON)
-                                    : readFromArchive(modJar, QStringLiteral("assets/polytechhub/textures/gui/preset_%1.png").arg(id));
-        choice.icon = QImage::fromData(icon);
+        choice.icon = id == QLatin1String("potato")
+                          ? QImage(POTATO_ICON)
+                          : QImage::fromData(readFromArchive(modJar, QStringLiteral("assets/polytechhub/textures/gui/preset_%1.png").arg(id)));
         choices.append(choice);
     }
 
-    GraphicsPresetDialog dialog(choices, texts);
+    // What this computer can take: the suggested preset is chosen in the dialog from the start.
+    const HardwareRating::Assessment hardware = HardwareRating::assessThisComputer();
+    emit logLine(tr("Graphics preset suggestion: %1").arg(hardware.describe()), MessageLevel::Launcher);
+
+    GraphicsPresetDialog dialog(choices, texts, hardware);
     if (dialog.exec() != QDialog::Accepted) {
         // Nothing recorded: the mod offers its own chooser in game.
         emit logLine(tr("Graphics preset was not chosen, it will be offered in game."), MessageLevel::Launcher);
@@ -250,7 +232,7 @@ void ApplyGraphicsPreset::executeTask()
 /**
  * Writes the preset to disk the way VanillaGraphicsApplier + OculusBridge apply it in
  * game: options.txt in the game's own value format, resource packs enabled/disabled
- * one by one (not a full list), shaders on/off in oculus.properties. Distant Horizons
+ * one by one (not a full list), shaders on/off and the shader pack in oculus.properties. Distant Horizons
  * is applied by the mod at startup.
  */
 bool ApplyGraphicsPreset::applyPreset(const QString& id, const QByteArray& presetData, QString& error)
@@ -407,7 +389,10 @@ bool ApplyGraphicsPreset::applyPreset(const QString& id, const QByteArray& prese
         return false;
     }
 
-    // --- shaders: Oculus reads enableShaders at startup; the shader pack name stays as is ---
+    // --- shaders: Oculus reads enableShaders and shaderPack at startup ---
+    // Turning shaders on needs a pack too (a clean install has none chosen): the preset's
+    // oculus.shaderPack if it is in shaderpacks/, else the player's own if it is there,
+    // else the first pack in the folder. Same choice as OculusBridge in the mod.
     const QString shaders = get(QStringLiteral("oculus.enableShaders")).toLower();
     if (shaders == QLatin1String("true") || shaders == QLatin1String("false")) {
         bool oculus = false;
@@ -418,20 +403,65 @@ bool ApplyGraphicsPreset::applyPreset(const QString& id, const QByteArray& prese
         }
         if (oculus) {
             const QString path = game.filePath(QStringLiteral("config/oculus.properties"));
-            QStringList out;
-            bool replaced = false;
-            for (const QString& line : splitLines(readFile(path))) {
+            auto isKey = [](const QString& line, const QString& key) {
                 const QString trimmed = line.trimmed();
-                if (trimmed.startsWith(QLatin1String("enableShaders")) &&
-                    (trimmed.size() == 13 || trimmed[13] == '=' || trimmed[13] == ':' || trimmed[13].isSpace())) {
+                return trimmed.startsWith(key) &&
+                       (trimmed.size() == key.size() || trimmed[key.size()] == '=' || trimmed[key.size()] == ':' || trimmed[key.size()].isSpace());
+            };
+            auto valueOf = [](const QString& line) {
+                const QString trimmed = line.trimmed();
+                const int sep = trimmed.indexOf(QRegularExpression(QStringLiteral("[=:]")));
+                return sep < 0 ? QString() : trimmed.mid(sep + 1).trimmed();
+            };
+            const QStringList current = splitLines(readFile(path));
+
+            // the pack to switch on (only when shaders are switched on)
+            QString pack;
+            if (shaders == QLatin1String("true")) {
+                const QDir packsDir(game.filePath(QStringLiteral("shaderpacks")));
+                QStringList packs;
+                for (const QFileInfo& entry : packsDir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+                    if ((entry.isFile() && entry.suffix().compare(QStringLiteral("zip"), Qt::CaseInsensitive) == 0) ||
+                        (entry.isDir() && QDir(entry.filePath()).exists(QStringLiteral("shaders"))))
+                        packs.append(entry.fileName());
+                }
+                packs.sort(Qt::CaseInsensitive);
+                QString own;
+                for (const QString& line : current) {
+                    if (isKey(line, QStringLiteral("shaderPack")))
+                        own = valueOf(line);
+                }
+                const QString wanted = get(QStringLiteral("oculus.shaderPack"));
+                if (!wanted.isEmpty() && packs.contains(wanted))
+                    pack = wanted;
+                else if (!own.isEmpty() && packs.contains(own))
+                    pack = own;
+                else if (!packs.isEmpty())
+                    pack = packs.first();
+                if (!wanted.isEmpty() && pack != wanted)
+                    warn(tr("shader pack %1 is not in shaderpacks").arg(wanted));
+                if (pack.isEmpty())
+                    warn(tr("no shader pack in shaderpacks: shaders are on without one"));
+            }
+
+            QStringList out;
+            bool enabledWritten = false;
+            bool packWritten = false;
+            for (const QString& line : current) {
+                if (isKey(line, QStringLiteral("enableShaders"))) {
                     out.append(QStringLiteral("enableShaders=") + shaders);
-                    replaced = true;
+                    enabledWritten = true;
+                } else if (!pack.isEmpty() && isKey(line, QStringLiteral("shaderPack"))) {
+                    out.append(QStringLiteral("shaderPack=") + pack);
+                    packWritten = true;
                 } else if (!line.isEmpty()) {
                     out.append(line);
                 }
             }
-            if (!replaced)
+            if (!enabledWritten)
                 out.append(QStringLiteral("enableShaders=") + shaders);
+            if (!pack.isEmpty() && !packWritten)
+                out.append(QStringLiteral("shaderPack=") + pack);
             if (!writeText(path, out.join('\n') + '\n')) {
                 error = tr("cannot write oculus.properties");
                 return false;
