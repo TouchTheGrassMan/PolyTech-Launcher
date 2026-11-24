@@ -87,7 +87,7 @@ Theme makeNewYear()
     Theme t;
     t.id = QStringLiteral("newyear");
     t.name = QObject::tr("Новогоднее");
-    t.available = false;  // for the New Year holidays: switched on by setting this to true
+    t.available = true;  // for the New Year holidays only: false switches it off for the rest of the year
     t.picture = QStringLiteral(":/obsidium/frame_winter.png");
     t.base = { 1650, 1082 };
     auto set = [&t](Slot slot, QRect r) { t.rects[int(slot)] = r; };
@@ -113,7 +113,9 @@ Theme makeNewYear()
 
 const QList<Theme>& themes()
 {
-    static const QList<Theme> s_themes = { makeCave(), makeNewYear() };
+    // The first one is what players who never picked a theme get: the New Year one for the holidays.
+    // Out of season, put the cave first again and switch the New Year one off.
+    static const QList<Theme> s_themes = { makeNewYear(), makeCave() };
     return s_themes;
 }
 
